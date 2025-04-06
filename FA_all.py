@@ -83,15 +83,15 @@ def make_dataframe(model, fmin=0):
     if 'new_ngram' not in filtered_data:
         filtered_data.append("new_ngram")
     data = {"ngram": [],
-            "ƒ": np.empty(len(filtered_data), dtype=np.dtype(int))}
+            "F": np.empty(len(filtered_data), dtype=np.dtype(int))}
 
     for i, ngram in enumerate(filtered_data):
         data["ngram"].append(ngram)
 
         if ngram == "new_ngram":
-            data['ƒ'][i] = sum(model[ngram].bool)
+            data['F'][i] = sum(model[ngram].bool)
             continue
-        data["ƒ"][i] = len(model[ngram].pos)
+        data["F"][i] = len(model[ngram].pos)
 
     dffff = pd.DataFrame(data=data)
     return dffff
@@ -564,7 +564,7 @@ layout1 = html.Div([
                                              children=[dbc.Spinner(dt.DataTable(
                                                  id="table",
                                                  columns=[{"name": i, "id": i} for i in
-                                                          ['rank', "ngram", "ƒ", "R", "a", "b", "goodness"]],
+                                                          ['rank', "ngram", "F", "R", "a", "γ", "goodness"]],
                                                  style_data={'whiteSpace': 'auto', 'height': 'auto'},
                                                  editable=False,
                                                  filter_action="native",
@@ -1020,18 +1020,18 @@ def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, w
             new_ngram.R = round(R(new_ngram.dt), 8)
             c, _ = curve_fit(fit, [*new_ngram.dfa.keys()], [*new_ngram.dfa.values()], method='lm', maxfev=5000)
             new_ngram.a = round(c[0], 8)
-            new_ngram.b = round(c[1], 8)
+            new_ngram.gamma = round(c[1], 8)
             new_ngram.temp_dfa = []
             for w in new_ngram.dfa.keys():
-                new_ngram.temp_dfa.append(fit(w, new_ngram.a, new_ngram.b))
+                new_ngram.temp_dfa.append(fit(w, new_ngram.a, new_ngram.gamma))
             new_ngram.goodness = round(r2_score([*new_ngram.dfa.values()], new_ngram.temp_dfa), 8)
             df = pd.DataFrame()
             df['rank'] = [1]
             df['ngram'] = ['new_ngram']
-            df["ƒ"] = [len(temp_pos)]
+            df["F"] = [len(temp_pos)]
             df['R'] = [new_ngram.R]
             df["a"] = [new_ngram.a]
-            df["b"] = [new_ngram.b]
+            df["γ"] = [new_ngram.gamma]
             df['goodness'] = [new_ngram.goodness]
             V = len(temp_v)
 
@@ -1050,7 +1050,7 @@ def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, w
 
             windows = list(range(w, wm, we))
 
-            temp_b = []
+            temp_gamma = []
             temp_R = []
             temp_error = []
             temp_ngram = []
@@ -1078,11 +1078,11 @@ def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, w
                 # окрім змінних в наступній записці)
                 c, _ = curve_fit(fit, windows, ff, method='lm', maxfev=5000)
                 model[ngram].a = c[0]
-                model[ngram].b = c[1]
+                model[ngram].gamma = c[1]
                 for w in windows:
                     model[ngram].temp_fa.append(fit(w, c[0], c[1]))
                 temp_error.append(round(r2_score(ff, model[ngram].temp_fa), 5))
-                temp_b.append(round(c[1], 8))
+                temp_gamma.append(round(c[1], 8))
                 temp_a.append(round(c[0], 8))
 
                 if isinstance(ngram, tuple):
@@ -1101,10 +1101,10 @@ def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, w
             #     NOTE через ці змінні в циклі які оновлюються по порядку і потім записуються напряму ж в колонку,
             #     неможливо просто так розділити
             df['R'] = temp_R
-            df['b'] = temp_b
+            df['γ'] = temp_gamma
             df['a'] = temp_a
             df['goodness'] = temp_error
-            df = df.sort_values(by="ƒ", ascending=False)
+            df = df.sort_values(by="F", ascending=False)
             df['rank'] = range(1, len(temp_R) + 1)
             df = df.set_index(pd.Index(np.arange(len(df))))
 
@@ -1137,24 +1137,24 @@ def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, w
         # del copy_df['dRw']
         # del copy_df['Rw']
         #
-        # copy_df['b_avg'] = copy_df['b'].mean()
-        # b_avg = copy_df.iloc[0, copy_df.columns.get_loc('b_avg')]
-        # del copy_df['b_avg']
+        # copy_df['γ_avg'] = copy_df['γ'].mean()
+        # γ_avg = copy_df.iloc[0, copy_df.columns.get_loc('γ_avg')]
+        # del copy_df['γ_avg']
         #
-        # copy_df['db'] = copy_df['b'].std()
-        # db = copy_df.iloc[0, copy_df.columns.get_loc('db')]
-        # del copy_df['db']
+        # copy_df['dγ'] = copy_df['γ'].std()
+        # dγ = copy_df.iloc[0, copy_df.columns.get_loc('dγ')]
+        # del copy_df['dγ']
         #
-        # copy_df['bw'] = (copy_df['b']) * (copy_df['w'])
+        # copy_df['γw'] = (copy_df['γ']) * (copy_df['w'])
         #
-        # copy_df['bw_avg'] = copy_df['bw'].sum()
-        # bw_avg = copy_df.iloc[0, copy_df.columns.get_loc('bw_avg')]
-        # del copy_df['bw_avg']
+        # copy_df['γw_avg'] = copy_df['γw'].sum()
+        # γw_avg = copy_df.iloc[0, copy_df.columns.get_loc('γw_avg')]
+        # del copy_df['γw_avg']
         #
-        # copy_df['dbw'] = np.sqrt((((copy_df['b'] - bw_avg) ** 2) * (copy_df['w'])).sum())
-        # dbw = copy_df.iloc[0, copy_df.columns.get_loc('dbw')]
-        # del copy_df['dbw']
-        # del copy_df['bw']
+        # copy_df['dγw'] = np.sqrt((((copy_df['γ'] - γw_avg) ** 2) * (copy_df['w'])).sum())
+        # dγw = copy_df.iloc[0, copy_df.columns.get_loc('dγw')]
+        # del copy_df['dγw']
+        # del copy_df['γw']
         #
         # copy_df['R_avg'] = R_avg
         # copy_df['R_avg'].iloc[1:] = None
@@ -1165,14 +1165,14 @@ def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, w
         # copy_df['dRw'] = dRw
         # copy_df['dRw'].iloc[1:] = None
         #
-        # copy_df['b_avg'] = b_avg
-        # copy_df['b_avg'].iloc[1:] = None
-        # copy_df['db'] = db
-        # copy_df['db'].iloc[1:] = None
-        # copy_df['bw_avg'] = bw_avg
-        # copy_df['bw_avg'].iloc[1:] = None
-        # copy_df['dbw'] = dbw
-        # copy_df['dbw'].iloc[1:] = None
+        # copy_df['γ_avg'] = γ_avg
+        # copy_df['γ_avg'].iloc[1:] = None
+        # copy_df['dγ'] = dγ
+        # copy_df['dγ'].iloc[1:] = None
+        # copy_df['γw_avg'] = γw_avg
+        # copy_df['γw_avg'].iloc[1:] = None
+        # copy_df['dγw'] = dγw
+        # copy_df['dγw'].iloc[1:] = None
 
         return [df.to_dict(orient='records'), dash.no_update, {"display": "inline"}, {"display": "none"},
                 dash.no_update,
@@ -1267,9 +1267,9 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                 hover_data = []
                 for data in df['ngram']:
                     hover_data.append("".join(data))
-                fig1.add_trace(go.Scatter(x=df["R"], y=df["b"], mode="markers", text=hover_data))
+                fig1.add_trace(go.Scatter(x=df["R"], y=df["γ"], mode="markers", text=hover_data))
                 fig1.add_trace(go.Scatter(x=[model[ngram].R],
-                                          y=[model[ngram].b],
+                                          y=[model[ngram].gamma],
                                           mode="markers",
                                           text=' '.join(ngram),
                                           marker=dict(
@@ -1346,7 +1346,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                         fig.add_trace(
                             go.Bar(x=np.arange(wh, L, wh), y=new_ngram.count[fa_click["points"][0]["x"]], name="∑∆w"))
 
-                    fig1.add_trace(go.Scatter(x=new_ngram.R, y=new_ngram.b, mode='marekers', hover_data=["new_ngram"]))
+                    fig1.add_trace(go.Scatter(x=new_ngram.R, y=new_ngram.gamma, mode='marekers', hover_data=["new_ngram"]))
                     fig1.update_xaxes(type=scale)
                     fig1.update_yaxes(type=scale)
                     fig1.update_layout(hovermode="x unified")
@@ -1376,11 +1376,11 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
 
                 graph_click = None
 
-                fig1.add_trace(go.Scatter(x=df["R"], y=df["b"], mode="markers", text=hover_data))
+                fig1.add_trace(go.Scatter(x=df["R"], y=df["γ"], mode="markers", text=hover_data))
                 # fig1.add_trace(go.Scatter(x=[df['R'][active_cell['row']]],
                 fig1.add_trace(go.Scatter(x=[df['R'][ids[active_cell['row']]]],
                                           # y=[df["b"][active_cell['row']]],
-                                          y=[df["b"][ids[active_cell['row']]]],
+                                          y=[df["γ"][ids[active_cell['row']]]],
                                           mode="markers",
                                           text=' '.join(ngram),
                                           marker=dict(
@@ -1397,7 +1397,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                 fig.add_trace(go.Scatter(x=np.arange(L), y=model[ngram].bool))
                 for data in df["ngram"]:
                     hover_data.append("".join(data))
-                fig1.add_trace(go.Scatter(x=df["R"], y=df["b"], mode="markers", text=hover_data))
+                fig1.add_trace(go.Scatter(x=df["R"], y=df["γ"], mode="markers", text=hover_data))
                 fig1.update_yaxes(type=scale)
                 fig1.update_xaxes(type=scale)
                 fig1.update_layout(hovermode="x unified")
@@ -1450,17 +1450,17 @@ def save(n, active_cell, page_current, ids, file, n_size, w, wh, we, wm, fmin, o
 
 
         if len(df_copy) > 0: # Ensure dataframe is not empty before calculating stats
-            df_copy['w'] = (df_copy['ƒ']) / (df_copy['ƒ'].sum())
+            df_copy['w'] = (df_copy['F']) / (df_copy['F'].sum())
 
             R_avg = df_copy['R'].mean()
             dR = df_copy['R'].std()
             Rw_avg = (df_copy['R'] * df_copy['w']).sum()
             dRw = np.sqrt((((df_copy['R'] - Rw_avg) ** 2) * df_copy['w']).sum())
 
-            b_avg = df_copy['b'].mean()
-            db = df_copy['b'].std()
-            bw_avg = (df_copy['b'] * df_copy['w']).sum()
-            dbw = np.sqrt((((df_copy['b'] - bw_avg) ** 2) * df_copy['w']).sum())
+            gamma_avg = df_copy['γ'].mean()
+            dgamma = df_copy['γ'].std()
+            gammaw_avg = (df_copy['γ'] * df_copy['w']).sum()
+            dgammaw = np.sqrt((((df_copy['γ'] - gammaw_avg) ** 2) * df_copy['w']).sum())
 
             # Assign calculated values using .loc to avoid SettingWithCopyWarning
             df_copy.loc[:, 'R_avg'] = None
@@ -1472,14 +1472,14 @@ def save(n, active_cell, page_current, ids, file, n_size, w, wh, we, wm, fmin, o
             df_copy.loc[:, 'dRw'] = None
             df_copy.loc[df_copy.index[0], 'dRw'] = dRw
 
-            df_copy.loc[:, 'b_avg'] = None
-            df_copy.loc[df_copy.index[0], 'b_avg'] = b_avg
-            df_copy.loc[:, 'db'] = None
-            df_copy.loc[df_copy.index[0], 'db'] = db
-            df_copy.loc[:, 'bw_avg'] = None
-            df_copy.loc[df_copy.index[0], 'bw_avg'] = bw_avg
-            df_copy.loc[:, 'dbw'] = None
-            df_copy.loc[df_copy.index[0], 'dbw'] = dbw
+            df_copy.loc[:, 'γ_avg'] = None
+            df_copy.loc[df_copy.index[0], 'γ_avg'] = gamma_avg
+            df_copy.loc[:, 'dγ'] = None
+            df_copy.loc[df_copy.index[0], 'dγ'] = dgamma
+            df_copy.loc[:, 'γw_avg'] = None
+            df_copy.loc[df_copy.index[0], 'γw_avg'] = gammaw_avg
+            df_copy.loc[:, 'dγw'] = None
+            df_copy.loc[df_copy.index[0], 'dγw'] = dgammaw
 
             # Remove temporary 'w' column if not needed in the final output
             df_copy = df_copy.drop(columns=['w'])
@@ -1493,7 +1493,7 @@ def save(n, active_cell, page_current, ids, file, n_size, w, wh, we, wm, fmin, o
 
 
         if definition == "dynamic":
-            output_filename = "saved_data/{0} contition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9}.xlsx".format(file, fmin, n_size, w, wh, we, wm, opt, definition, min_dist_option)
+            output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9}.xlsx".format(file, fmin, n_size, w, wh, we, wm, opt, definition, min_dist_option)
             with pd.ExcelWriter(output_filename) as writer:
                 df_copy.to_excel(writer, index=False) # Use df_copy here
             # writer.save() # Deprecated
@@ -1558,7 +1558,7 @@ def save(n, active_cell, page_current, ids, file, n_size, w, wh, we, wm, fmin, o
             return [html.Div(f"Saved data to {output_filename}")] # Provide feedback
 
         # Static definition part
-        output_filename_static = "saved_data/{0} contition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9}.xlsx".format(
+        output_filename_static = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9}.xlsx".format(
                 file, fmin, n_size, w, wh, we, wm, opt, definition, min_dist_option
             )
         with pd.ExcelWriter(output_filename_static) as writer:

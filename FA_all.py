@@ -461,6 +461,10 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 # Dictionary to store uploaded files
 uploaded_files = {}
+# Dictionary to store file lengths
+file_lengths = {}
+# List to store batch processing results
+batch_results = []
 
 # Removing the corpuses list since we're using file upload now
 # corpuses = listdir("corpus/")
@@ -579,6 +583,25 @@ layout1 = html.Div([
                                         dbc.Input(id="f_min", type="number", value=0)
                                     ]
                                 ),
+                                # Add UI elements for batch processing parameters
+                                html.Div([
+                                    html.H6("Batch Processing Settings", style={'marginTop': '10px'}),
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.InputGroupText("Lmin: Fmin1"),
+                                            dbc.Input(id="fmin1", type="number", value=1)
+                                        ],
+                                        style={'marginBottom': '5px'}
+                                    ),
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.InputGroupText("Lmax: Fmin2"),
+                                            dbc.Input(id="fmin2", type="number", value=5)
+                                        ],
+                                        style={'marginBottom': '5px'}
+                                    ),
+                                    dbc.Button("Process All Files", id="batch_process", color="success", className="w-100", style={'marginBottom': '10px'})
+                                ]),
                                 html.Label("Sliding window"),
 
                                 dbc.InputGroup(
@@ -738,11 +761,51 @@ layout1 = html.Div([
                                                 html.Div([""], id="copy_all", n_clicks=0, style={"fontWeight": "bold", "color": "blue", "cursor": "pointer"})
                                             ])
                                         ])
-                                    )
-
+                                    ),
+                                    # Add batch results table
+                                    html.Div([
+                                        html.H5("Batch Processing Results", style={'marginTop': '20px'}),
+                                        dbc.Spinner(dt.DataTable(
+                                            id="batch_table",
+                                            columns=[
+                                                {"name": "No.", "id": "no"},
+                                                {"name": "Filename", "id": "filename"},
+                                                {"name": "F_min", "id": "f_min"},
+                                                {"name": "Length (L)", "id": "length"},
+                                                {"name": "Vocabulary (V)", "id": "vocabulary"},
+                                                {"name": "Time (s)", "id": "time"},
+                                                {"name": "R_avg", "id": "r_avg"},
+                                                {"name": "dR", "id": "dr"},
+                                                {"name": "Rw_avg", "id": "rw_avg"},
+                                                {"name": "dRw", "id": "drw"},
+                                                {"name": "γ_avg", "id": "g_avg"},
+                                                {"name": "dγ", "id": "dg"},
+                                                {"name": "γw_avg", "id": "gw_avg"},
+                                                {"name": "dγw", "id": "dgw"}
+                                            ],
+                                            style_data={'whiteSpace': 'normal', 'height': 'auto'},
+                                            style_cell={'textAlign': 'center'},
+                                            style_header={'fontWeight': 'bold'},
+                                            style_table={"overflowX": "auto"},
+                                            style_data_conditional=[
+                                                {
+                                                    'if': {'row_index': -1},
+                                                    'fontWeight': 'bold',
+                                                    'backgroundColor': 'lightyellow'
+                                                },
+                                                {
+                                                    'if': {'row_index': -2},
+                                                    'fontWeight': 'bold',
+                                                    'backgroundColor': 'lightblue'
+                                                }
+                                            ]
+                                        )),
+                                        dbc.Button("Save Batch Results", id="save_batch", color="info", 
+                                                  className="mt-2", style={'marginTop': '10px'})
+                                    ], id="batch_results_container", style={"display": "none"})
                                 ]
                             )
-                        ], style={"padding": "0", "margin-right": "0px", "margin-top": "10px", "height": "650px"}),
+                        ], style={"padding": "0", "margin-right": "0px", "margin-top": "10px", "height": "auto", "minHeight": "650px"}),
                 ],
                 width={"size": 9, "padding": 0}
             ),
@@ -869,7 +932,7 @@ class NgrammProcessor:
 
 
 def is_valid_letter(char):
-    invalid_characters = [' ', '\n', '\ufeff', '°', '“', '„', '–']
+    invalid_characters = [' ', '\n', '\ufeff', '°', '"', '„', '–']
     if is_number(char) or char in invalid_characters:
         return True
     else:
@@ -883,10 +946,12 @@ length_updated = False
     [Output('upload-status', 'children'),
      Output('file-selector', 'options')],
     [Input('upload-data', 'contents')],
-    [State('upload-data', 'filename')]
+    [State('upload-data', 'filename'),
+     State('split', 'value'),
+     State('n_size', 'value')]
 )
-def update_upload_status(contents, filenames):
-    global uploaded_files
+def update_upload_status(contents, filenames, split, n_size):
+    global uploaded_files, file_lengths
     
     if contents is None:
         # Return current options for file selector
@@ -908,7 +973,33 @@ def update_upload_status(contents, filenames):
                 # Try reading as string
                 file_content = decoded.decode('utf-8')
                 uploaded_files[filename] = file_content
-                upload_status.append(html.Div([f"✓ Uploaded: {filename}"], style={'color': 'green'}))
+                
+                # Calculate and store file length
+                if split == "word":
+                    # Process text to get words
+                    text = re.sub(r'\n+', '\n', file_content)
+                    text = re.sub(r'\n\s\s', '\n', text)
+                    text = re.sub(r'﻿', '', text)
+                    text = re.sub(r'--', ' -', text)
+                    processor = NgrammProcessor()
+                    processor.preprocess(text)
+                    words = processor.get_words()
+                    file_lengths[filename] = len(words)
+                elif split == "symbol":
+                    # Count symbols
+                    text = re.sub(r'	', '', file_content)
+                    text = re.sub(r'\n+', '\n', text)
+                    text = re.sub(r'\n\s\s', '\n', text)
+                    text = re.sub(r'﻿', '', text)
+                    file_lengths[filename] = len(text)
+                elif split == "letter":
+                    # Count letters
+                    text = remove_punctuation(file_content)
+                    file_lengths[filename] = len(text)
+                
+                upload_status.append(html.Div([
+                    f"✓ Uploaded: {filename} (Length: {file_lengths[filename]} {split}s)"
+                ], style={'color': 'green'}))
             except UnicodeDecodeError:
                 upload_status.append(html.Div([f"✗ Error: {filename} is not a valid text file"], style={'color': 'red'}))
         except Exception as e:
@@ -1006,6 +1097,270 @@ def remove_empty_strings(arr):
     return [item for item in arr if item != '\ufeff']
 
 new_ngram = None
+
+
+# Add callback for batch processing
+@app.callback(
+    [Output("batch_table", "data"),
+     Output("batch_results_container", "style")],
+    [Input("batch_process", "n_clicks")],
+    [State("fmin1", "value"),
+     State("fmin2", "value"),
+     State("split", "value"),
+     State("n_size", "value"),
+     State("condition", "value"),
+     State("def", "value"),
+     State("min_dist_option", "value"),
+     State("overlap_mode", "value"),
+     State("w", "value"),
+     State("wh", "value"),
+     State("we", "value"),
+     State("wm", "value")]
+)
+def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definition, min_dist_option, overlap_mode, w, wh, we, wm):
+    global batch_results, uploaded_files, file_lengths
+    
+    if n_clicks is None or not uploaded_files:
+        return [], {"display": "none"}
+    
+    # Find Lmin and Lmax
+    lengths = list(file_lengths.values())
+    if not lengths:
+        return [], {"display": "none"}
+        
+    lmin = min(lengths)
+    lmax = max(lengths)
+    
+    # Initialize batch results list
+    batch_results = []
+    
+    # Process each file
+    for idx, (filename, file_content) in enumerate(uploaded_files.items(), 1):
+        # Calculate F_min based on file length
+        file_length = file_lengths[filename]
+        if lmin == lmax:
+            f_min = fmin1  # If all files are the same length
+        else:
+            # Linear interpolation between fmin1 and fmin2
+            f_min = fmin1 + (fmin2 - fmin1) * (file_length - lmin) / (lmax - lmin)
+            f_min = round(f_min)  # Round to nearest integer
+        
+        # Process the file
+        start_time = time()
+        
+        # Prepare data
+        global L, data, length_updated, model, V, df, new_ngram
+        
+        length_updated = False
+        
+        if definition == "dynamic":
+            data = prepere_data(file_content, n_size, split)
+            wm_val = int(L / 10) if wm is None else wm
+            w_val = int(wm_val / 10) if w is None else w
+        else:
+            temp = []
+            if split == "letter":
+                file_text = re.sub(r'	', '', file_content)
+                data = remove_punctuation(file_text)
+                for word in data:
+                    for i in word:
+                        if is_valid_letter(i):
+                            continue
+                        temp.append(i)
+                data = temp
+            elif split == "symbol":
+                data = file_content
+                data = re.sub(r'	', '', file_content)
+                data = re.sub(r'\n+', '\n', data)
+                data = re.sub(r'\n\s\s', '\n', data)
+                data = re.sub(r'﻿', '', data)
+                temp = []
+                for i in data:
+                    if i == " ":
+                        temp.append("space")
+                    elif i == "\n":
+                        temp.append("space")
+                        continue
+                    elif i == "\ufeff":
+                        temp.append("space")
+                        continue
+                    elif i == '' or is_valid_letter(i):
+                        continue
+                    else:
+                        i = i.lower()
+                        temp.append(i)
+                data = temp
+            elif split == "word":
+                file_text = re.sub(r'\n+', '\n', file_content)
+                file_text = re.sub(r'\n\s\s', '\n', file_text)
+                file_text = re.sub(r'﻿', '', file_text)
+                file_text = re.sub(r'--', ' -', file_text)
+                processor = NgrammProcessor()
+                processor.preprocess(file_text)
+                data = processor.get_words()
+
+            L = len(data)
+            wm_val = int(L / 20) if wm is None else wm
+            w_val = int(wm_val / 20) if w is None else w
+            
+        length_updated = True
+        
+        # Make Markov chain
+        make_markov_chain(data, order=n_size)
+        current_df = make_dataframe(model, f_min)
+        
+        # Process positions and calculate parameters
+        for index, ngram in enumerate(current_df['ngram']):
+            model[ngram].dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_option)
+            
+        windows = list(range(w_val, wm_val, we if we is not None else w_val))
+        
+        temp_gamma = []
+        temp_R = []
+        temp_error = []
+        temp_a = []
+        
+        # Process windows and calculate parameters
+        for i, ngram in enumerate(current_df["ngram"]):
+            for wind in windows:
+                if overlap_mode == "overlapping":
+                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=wh if wh is not None else w_val, overlap_mode=overlap_mode)
+                else:
+                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=wh if wh is not None else w_val, 
+                                                           overlap_mode=overlap_mode, min_window=w_val, window_expansion=we if we is not None else w_val)
+                model[ngram].fa[wind] = mse(model[ngram].counts[wind])
+
+            model[ngram].temp_fa = []
+            ff = [*model[ngram].fa.values()]
+            
+            try:
+                c, _ = curve_fit(fit, windows, ff, method='lm', maxfev=5000)
+                model[ngram].a = c[0]
+                model[ngram].gamma = c[1]
+                for w_val in windows:
+                    model[ngram].temp_fa.append(fit(w_val, c[0], c[1]))
+                temp_error.append(round(r2_score(ff, model[ngram].temp_fa), 5))
+                temp_gamma.append(round(c[1], 8))
+                temp_a.append(round(c[0], 8))
+            except:
+                # Handle curve fitting errors
+                temp_error.append(0)
+                temp_gamma.append(0)
+                temp_a.append(0)
+                
+            r = round(R(np.array(model[ngram].dt)), 8)
+            temp_R.append(r)
+            model[ngram].R = r
+            
+        if n_size > 1:
+            temp_ngram = []
+            for ng in current_df['ngram']:
+                if isinstance(ng, tuple):
+                    temp_ngram.append(" ".join(ng))
+            temp_ngram.append("new_ngram")
+            current_df["ngram"] = temp_ngram
+            
+        current_df['R'] = temp_R
+        current_df['γ'] = temp_gamma
+        current_df['a'] = temp_a
+        current_df['goodness'] = temp_error
+        current_df = current_df.sort_values(by="F", ascending=False)
+        current_df['rank'] = range(1, len(temp_R) + 1)
+        current_df = current_df.set_index(pd.Index(np.arange(len(current_df))))
+        
+        # Calculate the 8 parameters
+        df_filtered = current_df[current_df.ngram != 'new_ngram'].copy()
+        if len(df_filtered) > 0:
+            df_filtered['w'] = (df_filtered['F']) / (df_filtered['F'].sum())
+            
+            R_avg = df_filtered['R'].mean()
+            dR = df_filtered['R'].std()
+            Rw_avg = (df_filtered['R'] * df_filtered['w']).sum()
+            dRw = np.sqrt((((df_filtered['R'] - Rw_avg) ** 2) * df_filtered['w']).sum())
+            
+            gamma_avg = df_filtered['γ'].mean()
+            dgamma = df_filtered['γ'].std()
+            gammaw_avg = (df_filtered['γ'] * df_filtered['w']).sum()
+            dgammaw = np.sqrt((((df_filtered['γ'] - gammaw_avg) ** 2) * df_filtered['w']).sum())
+        else:
+            R_avg = dR = Rw_avg = dRw = gamma_avg = dgamma = gammaw_avg = dgammaw = 0
+        
+        end_time = time()
+        processing_time = end_time - start_time
+        
+        # Store results
+        result = {
+            "no": idx,
+            "filename": filename,
+            "f_min": f_min,
+            "length": L,
+            "vocabulary": V - 1,  # Excluding 'new_ngram'
+            "time": round(processing_time, 4),
+            "r_avg": round(R_avg, 8),
+            "dr": round(dR, 8),
+            "rw_avg": round(Rw_avg, 8),
+            "drw": round(dRw, 8),
+            "g_avg": round(gamma_avg, 8),
+            "dg": round(dgamma, 8),
+            "gw_avg": round(gammaw_avg, 8),
+            "dgw": round(dgammaw, 8)
+        }
+        
+        batch_results.append(result)
+    
+    # Calculate mean and standard deviation across all files
+    if batch_results:
+        # Extract numeric columns
+        numeric_columns = ['f_min', 'length', 'vocabulary', 'time', 
+                           'r_avg', 'dr', 'rw_avg', 'drw', 
+                           'g_avg', 'dg', 'gw_avg', 'dgw']
+        
+        # Calculate means
+        means = {col: round(np.mean([result[col] for result in batch_results]), 8) for col in numeric_columns}
+        means['no'] = 'Mean'
+        means['filename'] = 'Average'
+        
+        # Calculate standard deviations
+        stds = {col: round(np.std([result[col] for result in batch_results]), 8) for col in numeric_columns}
+        stds['no'] = 'StdDev'
+        stds['filename'] = 'Std. Dev.'
+        
+        # Add summary rows
+        batch_results.append(means)
+        batch_results.append(stds)
+    
+    return batch_results, {"display": "block"}
+
+# Add callback to save batch results
+@app.callback(
+    Output("temp_seve", "children", allow_duplicate=True),
+    [Input("save_batch", "n_clicks")],
+    [State("n_size", "value"),
+     State("split", "value"),
+     State("condition", "value"),
+     State("def", "value"),
+     State("min_dist_option", "value"),
+     State("overlap_mode", "value")],
+    prevent_initial_call=True
+)
+def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_option, overlap_mode):
+    if n_clicks is None or not batch_results:
+        return html.Div(["No batch results to save"])
+    
+    try:
+        # Create DataFrame from batch results
+        df_batch = pd.DataFrame(batch_results)
+        
+        # Create filename with parameters
+        output_filename = f"saved_data/batch_results_n={n_size},split={split},condition={condition},definition={definition},min_dist={min_dist_option},overlap={overlap_mode}.xlsx"
+        
+        # Save to Excel
+        with pd.ExcelWriter(output_filename) as writer:
+            df_batch.to_excel(writer, index=False)
+        
+        return html.Div([f"Saved batch results to {output_filename}"])
+    except Exception as e:
+        return html.Div([f"Error saving batch results: {str(e)}"])
 
 @app.callback([Output("table", "data"), Output("chain", "figure"),
                Output("box_tab", "style"),

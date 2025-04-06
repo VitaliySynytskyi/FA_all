@@ -461,7 +461,7 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 # Dictionary to store uploaded files
 uploaded_files = {}
-# Dictionary to store file lengths
+# Dictionary to store file lengths with structure: {filename: {'word': length, 'symbol': length, 'letter': length}}
 file_lengths = {}
 # List to store batch processing results
 batch_results = []
@@ -515,7 +515,8 @@ layout1 = html.Div([
                                                 dcc.Dropdown(
                                                     id='file-selector',
                                                     options=[],
-                                                    placeholder="Select a file to analyze"
+                                                    placeholder="Select a file to analyze",
+                                                    style={"minWidth": "250px", "maxWidth": "100%", "whiteSpace": "nowrap", "textOverflow": "ellipsis"}
                                                 )
                                             ], 
                                             size="md", 
@@ -546,43 +547,43 @@ layout1 = html.Div([
                                             size="md", 
                                             className="config"
                                         ),
-                                dbc.InputGroup(
-                                    [
-                                        dbc.Select(
-                                            id="condition",
-                                            options=[
-                                                {"label": "no", "value": "no"},
-                                                {"label": "periodic", "value": "periodic"},
-                                                {"label": "ordinary", "value": "ordinary"}
-                                            ],
-                                            value="no"
-                                        ),
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.Select(
+                                                    id="condition",
+                                                    options=[
+                                                        {"label": "no", "value": "no"},
+                                                        {"label": "periodic", "value": "periodic"},
+                                                        {"label": "ordinary", "value": "ordinary"}
+                                                    ],
+                                                    value="no"
+                                                ),
                                         dbc.InputGroupText("Boundary Condition:")
                                     ], 
                                     size="md", 
                                     className="config"
-                                ),
-                                dbc.InputGroup(
-                                    [
-                                        dbc.Select(
-                                            id="min_dist_option",
-                                            options=[
-                                                {"label": "min=1", "value": 1},
-                                                {"label": "min=0", "value": 0}
-                                            ],
-                                            value=1
                                         ),
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.Select(
+                                                    id="min_dist_option",
+                                                    options=[
+                                                        {"label": "min=1", "value": 1},
+                                                        {"label": "min=0", "value": 0}
+                                                    ],
+                                                    value=1
+                                                ),
                                         dbc.InputGroupText("Min Distance:")
                                     ], 
                                     size="md", 
                                     className="config"
-                                ),
-                                dbc.InputGroup(
-                                    [
-                                        dbc.InputGroupText("filter"),
-                                        dbc.Input(id="f_min", type="number", value=0)
-                                    ]
-                                ),
+                                        ),
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.InputGroupText("filter"),
+                                                dbc.Input(id="f_min", type="number", value=0)
+                                            ]
+                                        ),
                                 # Add UI elements for batch processing parameters
                                 html.Div([
                                     html.H6("Batch Processing Settings", style={'marginTop': '10px'}),
@@ -600,82 +601,104 @@ layout1 = html.Div([
                                         ],
                                         style={'marginBottom': '5px'}
                                     ),
+                                    # Add batch window settings options
+                                    dbc.Collapse(
+                                        [
+                                            html.H6("Batch Window Settings", style={'marginTop': '10px', 'fontSize': '14px'}),
+                                            dbc.InputGroup(
+                                                [
+                                                    dbc.Select(
+                                                        id="batch_window_mode",
+                                                        options=[
+                                                            {"label": "Use UI settings", "value": "ui"},
+                                                            {"label": "Auto per file", "value": "auto"},
+                                                        ],
+                                                        value="ui"
+                                                    ),
+                                                    dbc.InputGroupText("Window Mode")
+                                                ],
+                                                style={'marginBottom': '5px'}
+                                            ),
+                                        ],
+                                        id="batch_window_controls",
+                                        is_open=True
+                                    ),
                                     dbc.Button("Process All Files", id="batch_process", color="success", className="w-100", style={'marginBottom': '10px'})
                                 ]),
-                                html.Label("Sliding window"),
+                                        html.Label("Sliding window"),
 
-                                dbc.InputGroup(
-                                    [
-                                        dbc.Select(
-                                            id="overlap_mode",
-                                            options=[
-                                                {"label": "overlapping", "value": "overlapping"},
-                                                {"label": "non-overlapping", "value": "non-overlapping"}
-                                            ],
-                                            value="overlapping"
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.Select(
+                                                    id="overlap_mode",
+                                                    options=[
+                                                        {"label": "overlapping", "value": "overlapping"},
+                                                        {"label": "non-overlapping", "value": "non-overlapping"}
+                                                    ],
+                                                    value="overlapping"
+                                                ),
+                                                dbc.InputGroupText("Window Mode"),
+                                            ], size="md", className="window"
                                         ),
-                                        dbc.InputGroupText("Window Mode"),
-                                    ], size="md", className="window"
-                                ),
 
-                                dbc.InputGroup(
-                                    [
-                                        dbc.InputGroupText("Min window"),
-                                        dbc.Input(id="w", type="number"),
-                                    ], size="md", className="window"
-                                ),
-
-                                dbc.InputGroup(
-                                    [
-                                        dbc.InputGroupText("Window shift"),
-                                        dbc.Input(id="wh", type="number"),
-                                    ], size="md", className="window"
-                                ),
-
-                                dbc.InputGroup(
-                                    [
-                                        dbc.InputGroupText("Window expansion"),
-                                        dbc.Input(id="we", type="number"),
-                                    ], size="md", className="window"
-                                ),
-
-                                dbc.InputGroup(
-                                    [
-                                        dbc.InputGroupText("Max window"),
-                                        dbc.Input(id="wm", type="number"),
-                                    ], size="md", className="window"
-                                ),
-
-                                dbc.InputGroup(
-                                    [
-                                        dbc.Select(
-                                            id="def",
-                                            options=[
-                                                {"label": "static", "value": "static"},
-                                                {"label": "dynamic", "value": "dynamic"}
-                                            ],
-                                            value="static"
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.InputGroupText("Min window"),
+                                                dbc.Input(id="w", type="number"),
+                                            ], size="md", className="window"
                                         ),
-                                        dbc.InputGroupText("Definition")
-                                    ], size="md", className="window"
-                                ),
 
-                                # dbc.Input(placeholder="size of ngram",type="number"),
-                                # html.H6("Size of ngram:"),
-                                # dcc.Slider(id="n_size",min=1,max=9,value=1,marks={i:"{}".format(i)for i in range(1,10)}),
-                                # html.H6("Split by:"),
-                                # dcc.RadioItems(id='split',options=[{"label":"symbol","value":"symbol"},{"label":"word","value":"word"}],value="word"),
-                                # html.H6("Boundary Condition:"),
-                                # dcc.RadioItems(id='condition',options=[{"label":"no","value":"no"},{"label":"periodic","value":"periodic"},{"label":"ordinary","value":"ordinary"}],value="words"),
-                                html.Br(),
-                                dbc.Button("Analyze", id="chain_button", color="primary", className="w-100", disabled=analyze_visible),
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.InputGroupText("Window shift"),
+                                                dbc.Input(id="wh", type="number"),
+                                            ], size="md", className="window"
+                                        ),
 
-                                dbc.Button("Save data", id="save", color="danger", className="w-100"),
-                                html.Div(id="temp_seve",
-                                         children=[]
-                                         )
-                            ]),
-                        html.Div(id="alert", children=[])
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.InputGroupText("Window expansion"),
+                                                dbc.Input(id="we", type="number"),
+                                            ], size="md", className="window"
+                                        ),
+
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.InputGroupText("Max window"),
+                                                dbc.Input(id="wm", type="number"),
+                                            ], size="md", className="window"
+                                        ),
+
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.Select(
+                                                    id="def",
+                                                    options=[
+                                                        {"label": "static", "value": "static"},
+                                                        {"label": "dynamic", "value": "dynamic"}
+                                                    ],
+                                                    value="static"
+                                                ),
+                                                dbc.InputGroupText("Definition")
+                                            ], size="md", className="window"
+                                        ),
+
+                                        # dbc.Input(placeholder="size of ngram",type="number"),
+                                        # html.H6("Size of ngram:"),
+                                        # dcc.Slider(id="n_size",min=1,max=9,value=1,marks={i:"{}".format(i)for i in range(1,10)}),
+                                        # html.H6("Split by:"),
+                                        # dcc.RadioItems(id='split',options=[{"label":"symbol","value":"symbol"},{"label":"word","value":"word"}],value="word"),
+                                        # html.H6("Boundary Condition:"),
+                                        # dcc.RadioItems(id='condition',options=[{"label":"no","value":"no"},{"label":"periodic","value":"periodic"},{"label":"ordinary","value":"ordinary"}],value="words"),
+                                        html.Br(),
+                                        dbc.Button("Analyze", id="chain_button", color="primary", className="w-100", disabled=analyze_visible),
+
+                                        dbc.Button("Save data", id="save", color="danger", className="w-100"),
+                                        html.Div(id="temp_seve",
+                                                 children=[]
+                                                 )
+                                    ]),
+                                html.Div(id="alert", children=[])
                                 # html.H6("Boundary Condition:"),
                                 # dcc.RadioItems(id='condition',options=[{"label":"no","value":"no"},{"label":"periodic","value":"periodic"},{"label":"ordinary","value":"ordinary"}],value="words"),
                             ]
@@ -738,28 +761,28 @@ layout1 = html.Div([
                                         dbc.Row([
                                             # NOTE додала вивід 8-ми значень з екселю а також кнопку для копіювання всього
                                             dbc.Col([
-                                                html.Div(["Length: "], id="l"),
+                                                html.Div(["Length: "], id="l", style={"whiteSpace": "nowrap", "width": "100%", "overflow": "hidden", "textOverflow": "ellipsis"}),
                                                 html.Div(["Vocabulary: "], id="v"),
                                                 html.Div(["Time: "], id="t")
 
-                                            ]),
+                                            ], width={"size": 5}),
                                             dbc.Col([
                                                 html.Div([""], id="new_output1", n_clicks=0),
                                                 html.Div([""], id="new_output2", n_clicks=0),
-                                            ]),
+                                            ], width={"size": 2}),
                                             dbc.Col([
                                                 html.Div([""], id="new_output3", n_clicks=0),
                                                 html.Div([""], id="new_output4", n_clicks=0),
-                                            ]),
+                                            ], width={"size": 2}),
                                             dbc.Col([
                                                 html.Div([""], id="new_output5", n_clicks=0),
                                                 html.Div([""], id="new_output6", n_clicks=0),
-                                            ]),
+                                            ], width={"size": 2}),
                                             dbc.Col([
                                                 html.Div([""], id="new_output7", n_clicks=0),
                                                 html.Div([""], id="new_output8", n_clicks=0),
                                                 html.Div([""], id="copy_all", n_clicks=0, style={"fontWeight": "bold", "color": "blue", "cursor": "pointer"})
-                                            ])
+                                            ], width={"size": 1}),
                                         ])
                                     ),
                                     # Add batch results table
@@ -947,15 +970,14 @@ length_updated = False
      Output('file-selector', 'options')],
     [Input('upload-data', 'contents')],
     [State('upload-data', 'filename'),
-     State('split', 'value'),
      State('n_size', 'value')]
 )
-def update_upload_status(contents, filenames, split, n_size):
+def update_upload_status(contents, filenames, n_size):
     global uploaded_files, file_lengths
     
     if contents is None:
         # Return current options for file selector
-        options = [{'label': filename, 'value': filename} for filename in uploaded_files.keys()]
+        options = [{'label': filename, 'value': filename, 'title': filename} for filename in uploaded_files.keys()]
         return html.Div(["No new files uploaded"]), options
     
     # Create a list to store upload status messages
@@ -974,39 +996,44 @@ def update_upload_status(contents, filenames, split, n_size):
                 file_content = decoded.decode('utf-8')
                 uploaded_files[filename] = file_content
                 
-                # Calculate and store file length
-                if split == "word":
-                    # Process text to get words
-                    text = re.sub(r'\n+', '\n', file_content)
-                    text = re.sub(r'\n\s\s', '\n', text)
-                    text = re.sub(r'﻿', '', text)
-                    text = re.sub(r'--', ' -', text)
-                    processor = NgrammProcessor()
-                    processor.preprocess(text)
-                    words = processor.get_words()
-                    file_lengths[filename] = len(words)
-                elif split == "symbol":
-                    # Count symbols
-                    text = re.sub(r'	', '', file_content)
-                    text = re.sub(r'\n+', '\n', text)
-                    text = re.sub(r'\n\s\s', '\n', text)
-                    text = re.sub(r'﻿', '', text)
-                    file_lengths[filename] = len(text)
-                elif split == "letter":
-                    # Count letters
-                    text = remove_punctuation(file_content)
-                    file_lengths[filename] = len(text)
+                # Initialize length dictionary for this file
+                file_lengths[filename] = {}
+                
+                # Calculate and store word length
+                text_word = re.sub(r'\n+', '\n', file_content)
+                text_word = re.sub(r'\n\s\s', '\n', text_word)
+                text_word = re.sub(r'﻿', '', text_word)
+                text_word = re.sub(r'--', ' -', text_word)
+                processor = NgrammProcessor()
+                processor.preprocess(text_word)
+                words = processor.get_words()
+                file_lengths[filename]['word'] = len(words)
+                
+                # Calculate and store symbol length
+                text_symbol = re.sub(r'	', '', file_content)
+                text_symbol = re.sub(r'\n+', '\n', text_symbol)
+                text_symbol = re.sub(r'\n\s\s', '\n', text_symbol)
+                text_symbol = re.sub(r'﻿', '', text_symbol)
+                file_lengths[filename]['symbol'] = len(text_symbol)
+                
+                # Calculate and store letter length
+                text_letter = remove_punctuation(file_content)
+                file_lengths[filename]['letter'] = len(text_letter)
                 
                 upload_status.append(html.Div([
-                    f"✓ Uploaded: {filename} (Length: {file_lengths[filename]} {split}s)"
-                ], style={'color': 'green'}))
+                    f"✓ Uploaded: {filename}",
+                    html.Br(),
+                    html.Span(f"Words: {file_lengths[filename]['word']} | ", style={"marginLeft": "15px"}),
+                    html.Span(f"Symbols: {file_lengths[filename]['symbol']} | "),
+                    html.Span(f"Letters: {file_lengths[filename]['letter']}")
+                ], style={'color': 'green', 'marginBottom': '5px'}))
             except UnicodeDecodeError:
                 upload_status.append(html.Div([f"✗ Error: {filename} is not a valid text file"], style={'color': 'red'}))
         except Exception as e:
             upload_status.append(html.Div([f"✗ Error processing {filename}: {str(e)}"], style={'color': 'red'}))
     
-    # Create options for file selector dropdown
-    options = [{'label': filename, 'value': filename} for filename in uploaded_files.keys()]
+    # Create options for file selector dropdown, adding title attribute for tooltip
+    options = [{'label': filename, 'value': filename, 'title': filename} for filename in uploaded_files.keys()]
     
     return html.Div(upload_status), options
 
@@ -1018,9 +1045,9 @@ def update_upload_status(contents, filenames, split, n_size):
      Output('wh', 'value'),
      Output('we', 'value'),
      Output('wm', 'value')],
-    [Input('file-selector', 'value')],
-    [State('split', 'value'),
-     State('def', 'value'),
+    [Input('file-selector', 'value'),
+     Input('split', 'value')],
+    [State('def', 'value'),
      State('n_size', 'value')]
 )
 def process_selected_file(selected_filename, split, definition, n):
@@ -1090,7 +1117,14 @@ def process_selected_file(selected_filename, split, definition, n):
         w = int(wm / 20)
         length_updated = True
     
-    return ["Length: " + str(L)], w, w, w, wm
+    # Show all three lengths for the selected file
+    lengths_str = f"Length: {L} ({split}s) | "
+    for split_type in ['word', 'symbol', 'letter']:
+        if split_type != split:
+            lengths_str += f"{split_type}s: {file_lengths[selected_filename][split_type]} | "
+    lengths_str = lengths_str.rstrip(" | ")
+    
+    return [lengths_str], w, w, w, wm
 
 
 def remove_empty_strings(arr):
@@ -1115,16 +1149,18 @@ new_ngram = None
      State("w", "value"),
      State("wh", "value"),
      State("we", "value"),
-     State("wm", "value")]
+     State("wm", "value"),
+     State("batch_window_mode", "value")]
 )
-def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definition, min_dist_option, overlap_mode, w, wh, we, wm):
+def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definition, min_dist_option, 
+                      overlap_mode, w, wh, we, wm, batch_window_mode):
     global batch_results, uploaded_files, file_lengths
     
     if n_clicks is None or not uploaded_files:
         return [], {"display": "none"}
     
-    # Find Lmin and Lmax
-    lengths = list(file_lengths.values())
+    # Find Lmin and Lmax for the current split method
+    lengths = [file_lengths[filename][split] for filename in uploaded_files.keys()]
     if not lengths:
         return [], {"display": "none"}
         
@@ -1137,7 +1173,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
     # Process each file
     for idx, (filename, file_content) in enumerate(uploaded_files.items(), 1):
         # Calculate F_min based on file length
-        file_length = file_lengths[filename]
+        file_length = file_lengths[filename][split]
         if lmin == lmax:
             f_min = fmin1  # If all files are the same length
         else:
@@ -1155,8 +1191,6 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         
         if definition == "dynamic":
             data = prepere_data(file_content, n_size, split)
-            wm_val = int(L / 10) if wm is None else wm
-            w_val = int(wm_val / 10) if w is None else w
         else:
             temp = []
             if split == "letter":
@@ -1184,7 +1218,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
                     elif i == "\ufeff":
                         temp.append("space")
                         continue
-                    elif i == '' or is_valid_letter(i):
+                    elif i == '﻿' or is_valid_letter(i):
                         continue
                     else:
                         i = i.lower()
@@ -1199,10 +1233,32 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
                 processor.preprocess(file_text)
                 data = processor.get_words()
 
-            L = len(data)
-            wm_val = int(L / 20) if wm is None else wm
-            w_val = int(wm_val / 20) if w is None else w
+        L = len(data)
+        
+        # Calculate window parameters based on batch settings
+        if batch_window_mode == "ui":
+            # Use the values from the UI
+            wm_val = int(wm) if wm is not None else int(L / 20)
+            w_val = int(w) if w is not None else int(wm_val / 10)
+            wh_val = int(wh) if wh is not None else w_val
+            we_val = int(we) if we is not None else w_val
+        else:  # auto
+            # Calculate based on file length
+            if definition == "dynamic":
+                wm_val = int(L / 10)
+                w_val = int(wm_val / 10)
+            else:
+                wm_val = int(L / 20)
+                w_val = int(wm_val / 20)
+            wh_val = w_val
+            we_val = w_val
             
+        # Ensure we have valid non-zero values
+        wm_val = max(10, wm_val)
+        w_val = max(5, w_val)
+        wh_val = max(1, wh_val)
+        we_val = max(1, we_val)
+        
         length_updated = True
         
         # Make Markov chain
@@ -1213,7 +1269,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         for index, ngram in enumerate(current_df['ngram']):
             model[ngram].dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_option)
             
-        windows = list(range(w_val, wm_val, we if we is not None else w_val))
+        windows = list(range(w_val, wm_val, we_val))
         
         temp_gamma = []
         temp_R = []
@@ -1224,10 +1280,10 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         for i, ngram in enumerate(current_df["ngram"]):
             for wind in windows:
                 if overlap_mode == "overlapping":
-                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=wh if wh is not None else w_val, overlap_mode=overlap_mode)
+                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=wh_val, overlap_mode=overlap_mode)
                 else:
-                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=wh if wh is not None else w_val, 
-                                                           overlap_mode=overlap_mode, min_window=w_val, window_expansion=we if we is not None else w_val)
+                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=wh_val, 
+                                                           overlap_mode=overlap_mode, min_window=w_val, window_expansion=we_val)
                 model[ngram].fa[wind] = mse(model[ngram].counts[wind])
 
             model[ngram].temp_fa = []
@@ -1303,7 +1359,12 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             "g_avg": round(gamma_avg, 8),
             "dg": round(dgamma, 8),
             "gw_avg": round(gammaw_avg, 8),
-            "dgw": round(dgammaw, 8)
+            "dgw": round(dgammaw, 8),
+            # Add window parameters to results
+            "w_val": w_val,
+            "wh_val": wh_val,
+            "we_val": we_val, 
+            "wm_val": wm_val
         }
         
         batch_results.append(result)
@@ -1313,7 +1374,8 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         # Extract numeric columns
         numeric_columns = ['f_min', 'length', 'vocabulary', 'time', 
                            'r_avg', 'dr', 'rw_avg', 'drw', 
-                           'g_avg', 'dg', 'gw_avg', 'dgw']
+                           'g_avg', 'dg', 'gw_avg', 'dgw',
+                           'w_val', 'wh_val', 'we_val', 'wm_val']
         
         # Calculate means
         means = {col: round(np.mean([result[col] for result in batch_results]), 8) for col in numeric_columns}
@@ -1330,6 +1392,39 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         batch_results.append(stds)
     
     return batch_results, {"display": "block"}
+
+# Update the batch results table to show window parameters too
+@app.callback(
+    Output("batch_table", "columns", allow_duplicate=True),
+    [Input("batch_process", "n_clicks")],
+    prevent_initial_call=True
+)
+def update_batch_table_columns(n_clicks):
+    if n_clicks is None:
+        return dash.no_update
+    
+    columns = [
+        {"name": "No.", "id": "no"},
+        {"name": "Filename", "id": "filename"},
+        {"name": "F_min", "id": "f_min"},
+        {"name": "Length (L)", "id": "length"},
+        {"name": "Vocabulary (V)", "id": "vocabulary"},
+        {"name": "Time (s)", "id": "time"},
+        {"name": "R_avg", "id": "r_avg"},
+        {"name": "dR", "id": "dr"},
+        {"name": "Rw_avg", "id": "rw_avg"},
+        {"name": "dRw", "id": "drw"},
+        {"name": "γ_avg", "id": "g_avg"},
+        {"name": "dγ", "id": "dg"},
+        {"name": "γw_avg", "id": "gw_avg"},
+        {"name": "dγw", "id": "dgw"},
+        {"name": "W", "id": "w_val"},
+        {"name": "WH", "id": "wh_val"},
+        {"name": "WE", "id": "we_val"},
+        {"name": "WM", "id": "wm_val"}
+    ]
+    
+    return columns
 
 # Add callback to save batch results
 @app.callback(
@@ -1409,7 +1504,7 @@ def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option
                  dash.no_update)
 
     global L, V, model, ngram, df, g, new_ngram
-    
+
     if dataframe == "markov_chain":
         ## make markov chain graph ###
         g = nx.MultiGraph()
@@ -2125,3 +2220,11 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
 if __name__ == "__main__":
     # webbrowser.open_new("http://127.0.0.1:8050/") # Commented out
     app.run(debug=False)
+
+# Add callback to toggle batch window settings
+@app.callback(
+    Output("batch_custom_controls", "is_open"),
+    [Input("batch_window_mode", "value")]
+)
+def toggle_batch_window_controls(mode):
+    return mode == "custom"

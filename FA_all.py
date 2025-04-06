@@ -14,6 +14,8 @@ from os import listdir
 import plotly.graph_objects as go
 import dash_bootstrap_components as dbc
 import re
+import base64
+import io
 
 
 def remove_punctuation_for_words(data):
@@ -457,9 +459,8 @@ class newNgram():
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-
-
-corpuses = listdir("corpus/")
+# Removing the corpuses list since we're using file upload now
+# corpuses = listdir("corpus/")
 colors = {
     "background": "#a1a1a1",
     "text": "#a1a1a1"}
@@ -477,10 +478,29 @@ layout1 = html.Div([
                         dbc.CardHeader("Configuration:"),
                         dbc.CardBody(
                             [
-                                html.Label("Choose file:"),
+                                html.Label("Upload file:"),
                                 html.Div(
                                     [
-                                        dcc.Dropdown(id="corpus", options=[{"label": i, "value": i} for i in corpuses]),
+                                        # Replace dropdown with Upload component
+                                        dcc.Upload(
+                                            id='upload-data',
+                                            children=html.Div([
+                                                'Drag and Drop or ',
+                                                html.A('Select a File')
+                                            ]),
+                                            style={
+                                                'width': '100%',
+                                                'height': '60px',
+                                                'lineHeight': '60px',
+                                                'borderWidth': '1px',
+                                                'borderStyle': 'dashed',
+                                                'borderRadius': '5px',
+                                                'textAlign': 'center',
+                                                'margin': '10px 0'
+                                            },
+                                            multiple=False
+                                        ),
+                                        html.Div(id='upload-status'),
                                         dbc.InputGroup(
                                             [
                                                 dbc.InputGroupText("Size of ngram"),
@@ -836,102 +856,98 @@ def is_valid_letter(char):
 length_updated = False
 
 
-@app.callback([Output("w", "value"),
-               Output("wh", "value"),
-               Output("we", "value"),
-               Output("wm", "value"),
-               Output("l", "children")],
-              [Input("corpus", "value"), Input("split", "value"),
-               Input("def", "value"), Input("n_size", "value")])
-def calc_window(corpus, split, definition, n):
-    if corpus is None:
-        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+@app.callback([Output('upload-status', 'children'),
+               Output('l', 'children'),
+               Output('w', 'value'),
+               Output('wh', 'value'),
+               Output('we', 'value'),
+               Output('wm', 'value')],
+              [Input('upload-data', 'contents')],
+              [State('upload-data', 'filename'),
+               State('split', 'value'),
+               State('def', 'value'),
+               State('n_size', 'value')]
+)
+def update_upload_status(contents, filename, split, definition, n):
     global L, data, length_updated
-    length_updated = False
-    with open("corpus/" + corpus, encoding='utf-8') as f:
-        file = f.read()
-    if definition == "dynamic":
-        data = prepere_data(file, n, split)
-        wm = int(L / 10)
-        w = int(wm / 10)
-    else:
-        temp = []
-        if split == "letter":
-            file = re.sub(r'	', '', file)
-            data = remove_punctuation(file)
-            for word in data:
-                for i in word:
-                    if is_valid_letter(i):
+    if contents is None:
+        return html.Div(["No file uploaded"]), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+    
+    # Parse the uploaded file
+    content_type, content_string = contents.split(',')
+    decoded = base64.b64decode(content_string)
+    
+    try:
+        # Try reading as string
+        file = decoded.decode('utf-8')
+        
+        length_updated = False
+        
+        if definition == "dynamic":
+            data = prepere_data(file, n, split)
+            wm = int(L / 10)
+            w = int(wm / 10)
+        else:
+            temp = []
+            if split == "letter":
+                file = re.sub(r'	', '', file)
+                data = remove_punctuation(file)
+                for word in data:
+                    for i in word:
+                        if is_valid_letter(i):
+                            continue
+                        temp.append(i)
+                data = temp
+            if split == "symbol":
+                data = file
+                data = re.sub(r'	', '', file)
+                data = re.sub(r'\n+', '\n', data)
+                data = re.sub(r'\n\s\s', '\n', data)
+                data = re.sub(r'﻿', '', data)
+                for i in data:
+                    if i == " ":
+                        temp.append("space")
+                    elif i == "\n":
+                        temp.append("space")
                         continue
-                    temp.append(i)
-            data = temp
-        if split == "symbol":
-            data = file
-            data = re.sub(r'	', '', file)
-            data = re.sub(r'\n+', '\n', data)
-            data = re.sub(r'\n\s\s', '\n', data)
-            data = re.sub(r'﻿', '', data)
-            for i in data:
-                if i == " ":
-                    temp.append("space")
-                elif i == "\n":
-                    temp.append("space")
-                    continue
-                elif i == "\ufeff":
-                    temp.append("space")
-                    continue
-                elif i == '﻿' or is_valid_letter(i):
-                    continue
-                else:
-                    i = i.lower()
-                    temp.append(i)
+                    elif i == "\ufeff":
+                        temp.append("space")
+                        continue
+                    elif i == '﻿' or is_valid_letter(i):
+                        continue
+                    else:
+                        i = i.lower()
+                        temp.append(i)
 
-            data = temp
+                data = temp
 
-        if split == "word":
-            file = re.sub(r'\n+', '\n', file)
-            file = re.sub(r'\n\s\s', '\n', file)
-            file = re.sub(r'﻿', '', file)
-            file = re.sub(r'--', ' -', file)
-            # NOTE попередня версія розрахування слів
-            # data = remove_punctuation(file)
-            # data = remove_punctuation_for_words(file)
-            # data = data.split()
-            # data = remove_empty_strings(data)
+            if split == "word":
+                file = re.sub(r'\n+', '\n', file)
+                file = re.sub(r'\n\s\s', '\n', file)
+                file = re.sub(r'﻿', '', file)
+                file = re.sub(r'--', ' -', file)
 
-            processor = NgrammProcessor()
-            # обробка тексту
-            processor.preprocess(file)
+                processor = NgrammProcessor()
+                # обробка тексту
+                processor.preprocess(file)
 
-            # Отримання слів у тексті
-            data = processor.get_words()
+                # Отримання слів у тексті
+                data = processor.get_words()
 
-        L = len(data)
-        wm = int(L / 20)
-        w = int(wm / 20)
-        length_updated = True
-    return [w, w, w, wm, ["Lenght: " + str(L)]]
-
+            L = len(data)
+            wm = int(L / 20)
+            w = int(wm / 20)
+            length_updated = True
+        
+        return html.Div([f"Uploaded: {filename}", html.Br()]), ["Length: " + str(L)], w, w, w, wm
+    
+    except Exception as e:
+        return html.Div([f'Error processing file: {str(e)}']), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
 def remove_empty_strings(arr):
     return [item for item in arr if item != '\ufeff']
 
-
 new_ngram = None
-
-
-
-# @app.callback(
-#     Output('chain_button', 'disabled'),
-#     Input("split", "value")
-# )
-# def update_output(selected_value):
-#     global length_updated
-#     if length_updated:
-#         length_updated = False
-#         return False
-#     else:
-#         return True
 
 @app.callback([Output("table", "data"), Output("chain", "figure"),
                Output("box_tab", "style"),
@@ -943,20 +959,19 @@ new_ngram = None
                ],
               [Input("chain_button", "n_clicks"),
                Input("dataframe", "active_tab")],
-              [State("corpus", "value"),
-               State("n_size", "value"),
-               State("split", "value"),
-               State("condition", "value"),
-               State("f_min", "value"),
+              [State("f_min", "value"),
                State("w", "value"),
                State("wh", "value"),
                State("we", "value"),
                State("wm", "value"),
                State("def", "value"),
                State("min_dist_option", "value"),
-               State("overlap_mode", "value")
+               State("overlap_mode", "value"),
+               State("n_size", "value"),
+               State("split", "value"),
+               State("condition", "value")
                ])
-def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, we, wm, definition, min_dist_option, overlap_mode):
+def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option, overlap_mode, n_size, split, condition):
     global length_updated
 
     if n is None:
@@ -973,15 +988,15 @@ def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, w
                  True
                 )
 
-    # add alert corpus if not selected
-    if corpus is None:
+    # Replace corpus check with data check
+    if data is None or len(data) == 0:
         return (dash.no_update, dash.no_update, {"display": "inline"}, {"display": "none"}, dbc.Alert(
-            "Please choose corpus", color="danger", duration=2000,
+            "Please upload a file", color="danger", duration=2000,
             dismissable=False), dash.no_update, dash.no_update,
                  dash.no_update)
 
-    global data, L, V, model, ngram, df, g, new_ngram
-
+    global L, V, model, ngram, df, g, new_ngram
+    
     if dataframe == "markov_chain":
         ## make markov chain graph ###
         g = nx.MultiGraph()
@@ -1200,68 +1215,6 @@ def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, w
         voc = str(V)
         voc = int(voc) - 1
         # HERE V-1
-
-        # copy_df = df.copy()
-        # copy_df = copy_df[copy_df.ngram != 'new_ngram']
-        # copy_df['rank'] = copy_df['rank'] - 1
-        #
-        # copy_df['w'] = (copy_df['ƒ']) / (copy_df['ƒ'].sum())
-        #
-        # copy_df['R_avg'] = copy_df['R'].mean()
-        # R_avg = copy_df.iloc[0, copy_df.columns.get_loc('R_avg')]
-        # del copy_df['R_avg']
-        #
-        # copy_df['dR'] = copy_df['R'].std()
-        # dR = copy_df.iloc[0, copy_df.columns.get_loc('dR')]
-        # del copy_df['dR']
-        #
-        # copy_df['Rw'] = (copy_df['R']) * (copy_df['w'])
-        #
-        # copy_df['Rw_avg'] = copy_df['Rw'].sum()
-        # Rw_avg = copy_df.iloc[0, copy_df.columns.get_loc('Rw_avg')]
-        # del copy_df['Rw_avg']
-        #
-        # copy_df['dRw'] = np.sqrt((((copy_df['R'] - Rw_avg) ** 2) * (copy_df['w'])).sum())
-        # dRw = copy_df.iloc[0, copy_df.columns.get_loc('dRw')]
-        # del copy_df['dRw']
-        # del copy_df['Rw']
-        #
-        # copy_df['γ_avg'] = copy_df['γ'].mean()
-        # γ_avg = copy_df.iloc[0, copy_df.columns.get_loc('γ_avg')]
-        # del copy_df['γ_avg']
-        #
-        # copy_df['dγ'] = copy_df['γ'].std()
-        # dγ = copy_df.iloc[0, copy_df.columns.get_loc('dγ')]
-        # del copy_df['dγ']
-        #
-        # copy_df['γw'] = (copy_df['γ']) * (copy_df['w'])
-        #
-        # copy_df['γw_avg'] = copy_df['γw'].sum()
-        # γw_avg = copy_df.iloc[0, copy_df.columns.get_loc('γw_avg')]
-        # del copy_df['γw_avg']
-        #
-        # copy_df['dγw'] = np.sqrt((((copy_df['γ'] - γw_avg) ** 2) * (copy_df['w'])).sum())
-        # dγw = copy_df.iloc[0, copy_df.columns.get_loc('dγw')]
-        # del copy_df['dγw']
-        # del copy_df['γw']
-        #
-        # copy_df['R_avg'] = R_avg
-        # copy_df['R_avg'].iloc[1:] = None
-        # copy_df['dR'] = dR
-        # copy_df['dR'].iloc[1:] = None
-        # copy_df['Rw_avg'] = Rw_avg
-        # copy_df['Rw_avg'].iloc[1:] = None
-        # copy_df['dRw'] = dRw
-        # copy_df['dRw'].iloc[1:] = None
-        #
-        # copy_df['γ_avg'] = γ_avg
-        # copy_df['γ_avg'].iloc[1:] = None
-        # copy_df['dγ'] = dγ
-        # copy_df['dγ'].iloc[1:] = None
-        # copy_df['γw_avg'] = γw_avg
-        # copy_df['γw_avg'].iloc[1:] = None
-        # copy_df['dγw'] = dγw
-        # copy_df['dγw'].iloc[1:] = None
 
         return [df.to_dict(orient='records'), dash.no_update, {"display": "inline"}, {"display": "none"},
                 dash.no_update,
@@ -1559,7 +1512,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                Input("table", "active_cell"),
                Input("table", "page_current"),
                Input("table", "derived_virtual_indices")],
-              [State("corpus", "value"),
+              [State("upload-data", "filename"),
                State("n_size", "value"),
                State("w", "value"),
                State("wh", "value"),
@@ -1570,10 +1523,12 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                State("def", "value"),
                State("min_dist_option", "value"),
                State("overlap_mode", "value")])
-def save(n, active_cell, page_current, ids, file, n_size, w, wh, we, wm, fmin, opt, definition, min_dist_option, overlap_mode):
-    if n is None:
+def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmin, opt, definition, min_dist_option, overlap_mode):
+    if n is None or filename is None:
         return dash.no_update
     else:
+        # The file parameter is now the uploaded filename
+        file = filename
         global df, model, new_ngram
 
         #   2023

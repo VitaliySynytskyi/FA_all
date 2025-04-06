@@ -613,7 +613,7 @@ layout1 = html.Div([
                                                             {"label": "Use UI settings", "value": "ui"},
                                                             {"label": "Auto per file", "value": "auto"},
                                                         ],
-                                                        value="ui"
+                                                        value="auto"
                                                     ),
                                                     dbc.InputGroupText("Window Mode")
                                                 ],

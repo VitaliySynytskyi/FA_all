@@ -2227,4 +2227,4 @@ if __name__ == "__main__":
     [Input("batch_window_mode", "value")]
 )
 def toggle_batch_window_controls(mode):
-    return mode == "custom"
+    return mode in ["ui", "auto"]

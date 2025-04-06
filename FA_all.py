@@ -152,44 +152,56 @@ def make_markov_chain(data, order=1):
     V = len(model)
 
 
-def calculate_distance(positions, L, option, ngram):
+def calculate_distance(positions, L, option, ngram, min_dist=1):
     if option == "no":
-        return nbc(positions)
+        return nbc(positions, min_dist)
     if option == "ordinary":
-        return obc(positions, L)
+        return obc(positions, L, min_dist)
     if option == "periodic":
-        return pbc(positions, L, ngram)
+        return pbc(positions, L, ngram, min_dist)
 
 
 @jit(nopython=True)
-def nbc(positions):
+def nbc(positions, min_dist=1):
     number_of_pos = len(positions)
     if number_of_pos == 1:
         return positions
     dt = np.empty(number_of_pos - 1, dtype=np.uint32)
     for i in range(number_of_pos - 1):
         dt[i] = positions[i + 1] - positions[i]
+        if min_dist == 0:
+            dt[i] = dt[i] - 1
     return dt
 
 
 @jit(nopython=True)
-def obc(positions, L):
+def obc(positions, L, min_dist=1):
     number_of_pos = len(positions)
     dt = np.empty(number_of_pos + 1, dtype=np.uint32)
     dt[0] = positions[0]
+    if min_dist == 0 and dt[0] > 0:
+        dt[0] = dt[0] - 1
     for i in range(number_of_pos - 1):
         dt[i + 1] = positions[i + 1] - positions[i]
+        if min_dist == 0:
+            dt[i + 1] = dt[i + 1] - 1
     dt[-1] = L - positions[-1]
+    if min_dist == 0 and dt[-1] > 0:
+        dt[-1] = dt[-1] - 1
     return dt
 
 
 @jit(nopython=True)
-def pbc(positions, L, test):
+def pbc(positions, L, test, min_dist=1):
     number_of_pos = len(positions)
     dt = np.zeros(number_of_pos, dtype=np.uint32)
     for i in range(number_of_pos - 1):
         dt[i] = positions[i + 1] - positions[i]
+        if min_dist == 0:
+            dt[i] = dt[i] - 1
     dt[-1] = L - positions[-1] + positions[0]
+    if min_dist == 0 and dt[-1] > 0:
+        dt[-1] = dt[-1] - 1
     return dt
 
 
@@ -438,6 +450,19 @@ layout1 = html.Div([
                                                     value="no"
                                                 ),
                                                 dbc.InputGroupText("Boundary Condition:"),
+                                            ], size="md", className="config"
+                                        ),
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.Select(
+                                                    id="min_dist_option",
+                                                    options=[
+                                                        {"label": "min=1", "value": 1},
+                                                        {"label": "min=0", "value": 0}
+                                                    ],
+                                                    value=1
+                                                ),
+                                                dbc.InputGroupText("Min Distance:"),
                                             ], size="md", className="config"
                                         ),
                                         dbc.InputGroup(
@@ -848,9 +873,10 @@ new_ngram = None
                State("wh", "value"),
                State("we", "value"),
                State("wm", "value"),
-               State("def", "value")
+               State("def", "value"),
+               State("min_dist_option", "value")
                ])
-def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, we, wm, definition):
+def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, we, wm, definition, min_dist_option):
     global length_updated
 
     if n is None:
@@ -935,9 +961,11 @@ def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, w
                 size=10,
                 colorbar=dict(
                     thickness=15,
-                    title='Node Connections',
-                    xanchor='left',
-                    titleside='right'
+                    title=dict(
+                        text='Node Connections',
+                        side='right'
+                    ),
+                    xanchor='left'
                 ),
                 line_width=2))
         node_adjacencies = []
@@ -988,7 +1016,7 @@ def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, w
                 if ngram not in temp_v:
                     temp_v.append(ngram)
                     temp_pos.append(i)
-            new_ngram.dt = calculate_distance(np.array(temp_pos, dtype=np.uint8), L, condition, ngram)
+            new_ngram.dt = calculate_distance(np.array(temp_pos, dtype=np.uint8), L, condition, ngram, min_dist_option)
             new_ngram.R = round(R(new_ngram.dt), 8)
             c, _ = curve_fit(fit, [*new_ngram.dfa.keys()], [*new_ngram.dfa.values()], method='lm', maxfev=5000)
             new_ngram.a = round(c[0], 8)
@@ -1014,7 +1042,7 @@ def update_table(n, dataframe, corpus, n_size, split, condition, f_min, w, wh, w
             df = make_dataframe(model, f_min)
 
             for index, ngram in enumerate(df['ngram']):
-                model[ngram].dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram)
+                model[ngram].dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_option)
 
             def func(wind):
                 model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=wh)
@@ -1396,8 +1424,9 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                State("wm", "value"),
                State("f_min", "value"),
                State("condition", "value"),
-               State("def", "value")])
-def save(n, active_cell, page_current, ids, file, n_size, w, wh, we, wm, fmin, opt, definition):
+               State("def", "value"),
+               State("min_dist_option", "value")])
+def save(n, active_cell, page_current, ids, file, n_size, w, wh, we, wm, fmin, opt, definition, min_dist_option):
     if n is None:
         return dash.no_update
     else:
@@ -1464,7 +1493,7 @@ def save(n, active_cell, page_current, ids, file, n_size, w, wh, we, wm, fmin, o
 
 
         if definition == "dynamic":
-            output_filename = "saved_data/{0} contition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8}.xlsx".format(file, fmin, n_size, w, wh, we, wm, opt, definition)
+            output_filename = "saved_data/{0} contition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9}.xlsx".format(file, fmin, n_size, w, wh, we, wm, opt, definition, min_dist_option)
             with pd.ExcelWriter(output_filename) as writer:
                 df_copy.to_excel(writer, index=False) # Use df_copy here
             # writer.save() # Deprecated
@@ -1529,8 +1558,8 @@ def save(n, active_cell, page_current, ids, file, n_size, w, wh, we, wm, fmin, o
             return [html.Div(f"Saved data to {output_filename}")] # Provide feedback
 
         # Static definition part
-        output_filename_static = "saved_data/{0} contition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8}.xlsx".format(
-                file, fmin, n_size, w, wh, we, wm, opt, definition
+        output_filename_static = "saved_data/{0} contition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9}.xlsx".format(
+                file, fmin, n_size, w, wh, we, wm, opt, definition, min_dist_option
             )
         with pd.ExcelWriter(output_filename_static) as writer:
             df_copy.to_excel(writer, index=False) # Use df_copy here

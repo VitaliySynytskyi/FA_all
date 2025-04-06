@@ -459,6 +459,9 @@ class newNgram():
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
+# Dictionary to store uploaded files
+uploaded_files = {}
+
 # Removing the corpuses list since we're using file upload now
 # corpuses = listdir("corpus/")
 colors = {
@@ -486,7 +489,7 @@ layout1 = html.Div([
                                             id='upload-data',
                                             children=html.Div([
                                                 'Drag and Drop or ',
-                                                html.A('Select a File')
+                                                html.A('Select Files')
                                             ]),
                                             style={
                                                 'width': '100%',
@@ -498,14 +501,30 @@ layout1 = html.Div([
                                                 'textAlign': 'center',
                                                 'margin': '10px 0'
                                             },
-                                            multiple=False
+                                            multiple=True
                                         ),
                                         html.Div(id='upload-status'),
+                                        # Add dropdown for selecting files
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.InputGroupText("Select file"),
+                                                dcc.Dropdown(
+                                                    id='file-selector',
+                                                    options=[],
+                                                    placeholder="Select a file to analyze"
+                                                )
+                                            ], 
+                                            size="md", 
+                                            className="config",
+                                            style={"marginBottom": "10px"}
+                                        ),
                                         dbc.InputGroup(
                                             [
                                                 dbc.InputGroupText("Size of ngram"),
-                                                dbc.Input(id="n_size", type="number", value=1),
-                                            ], size="md", className="config"
+                                                dbc.Input(id="n_size", type="number", value=1)
+                                            ], 
+                                            size="md", 
+                                            className="config"
                                         ),
                                         dbc.InputGroup(
                                             [
@@ -516,120 +535,124 @@ layout1 = html.Div([
                                                         {"label": "symbol", "value": "symbol"},
                                                         {"label": "word", "value": "word"},
                                                         {"label": "letter", "value": "letter"}
-
                                                     ],
                                                     value="word"
                                                 )
-                                            ], size="md", className="config"
+                                            ], 
+                                            size="md", 
+                                            className="config"
                                         ),
+                                dbc.InputGroup(
+                                    [
+                                        dbc.Select(
+                                            id="condition",
+                                            options=[
+                                                {"label": "no", "value": "no"},
+                                                {"label": "periodic", "value": "periodic"},
+                                                {"label": "ordinary", "value": "ordinary"}
+                                            ],
+                                            value="no"
+                                        ),
+                                        dbc.InputGroupText("Boundary Condition:")
+                                    ], 
+                                    size="md", 
+                                    className="config"
+                                ),
+                                dbc.InputGroup(
+                                    [
+                                        dbc.Select(
+                                            id="min_dist_option",
+                                            options=[
+                                                {"label": "min=1", "value": 1},
+                                                {"label": "min=0", "value": 0}
+                                            ],
+                                            value=1
+                                        ),
+                                        dbc.InputGroupText("Min Distance:")
+                                    ], 
+                                    size="md", 
+                                    className="config"
+                                ),
+                                dbc.InputGroup(
+                                    [
+                                        dbc.InputGroupText("filter"),
+                                        dbc.Input(id="f_min", type="number", value=0)
+                                    ]
+                                ),
+                                html.Label("Sliding window"),
 
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.Select(
-                                                    id="condition",
-                                                    options=[
-                                                        {"label": "no", "value": "no"},
-                                                        {"label": "periodic", "value": "periodic"},
-                                                        {"label": "ordinary", "value": "ordinary"}
-                                                    ],
-                                                    value="no"
-                                                ),
-                                                dbc.InputGroupText("Boundary Condition:"),
-                                            ], size="md", className="config"
+                                dbc.InputGroup(
+                                    [
+                                        dbc.Select(
+                                            id="overlap_mode",
+                                            options=[
+                                                {"label": "overlapping", "value": "overlapping"},
+                                                {"label": "non-overlapping", "value": "non-overlapping"}
+                                            ],
+                                            value="overlapping"
                                         ),
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.Select(
-                                                    id="min_dist_option",
-                                                    options=[
-                                                        {"label": "min=1", "value": 1},
-                                                        {"label": "min=0", "value": 0}
-                                                    ],
-                                                    value=1
-                                                ),
-                                                dbc.InputGroupText("Min Distance:"),
-                                            ], size="md", className="config"
-                                        ),
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("filter"),
-                                                dbc.Input(id="f_min", type="number", value=0)
-                                            ]
-                                        ),
-                                        html.Label("Sliding window"),
+                                        dbc.InputGroupText("Window Mode"),
+                                    ], size="md", className="window"
+                                ),
 
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.Select(
-                                                    id="overlap_mode",
-                                                    options=[
-                                                        {"label": "overlapping", "value": "overlapping"},
-                                                        {"label": "non-overlapping", "value": "non-overlapping"}
-                                                    ],
-                                                    value="overlapping"
-                                                ),
-                                                dbc.InputGroupText("Window Mode"),
-                                            ], size="md", className="window"
+                                dbc.InputGroup(
+                                    [
+                                        dbc.InputGroupText("Min window"),
+                                        dbc.Input(id="w", type="number"),
+                                    ], size="md", className="window"
+                                ),
+
+                                dbc.InputGroup(
+                                    [
+                                        dbc.InputGroupText("Window shift"),
+                                        dbc.Input(id="wh", type="number"),
+                                    ], size="md", className="window"
+                                ),
+
+                                dbc.InputGroup(
+                                    [
+                                        dbc.InputGroupText("Window expansion"),
+                                        dbc.Input(id="we", type="number"),
+                                    ], size="md", className="window"
+                                ),
+
+                                dbc.InputGroup(
+                                    [
+                                        dbc.InputGroupText("Max window"),
+                                        dbc.Input(id="wm", type="number"),
+                                    ], size="md", className="window"
+                                ),
+
+                                dbc.InputGroup(
+                                    [
+                                        dbc.Select(
+                                            id="def",
+                                            options=[
+                                                {"label": "static", "value": "static"},
+                                                {"label": "dynamic", "value": "dynamic"}
+                                            ],
+                                            value="static"
                                         ),
+                                        dbc.InputGroupText("Definition")
+                                    ], size="md", className="window"
+                                ),
 
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("Min window"),
-                                                dbc.Input(id="w", type="number"),
-                                            ], size="md", className="window"
-                                        ),
+                                # dbc.Input(placeholder="size of ngram",type="number"),
+                                # html.H6("Size of ngram:"),
+                                # dcc.Slider(id="n_size",min=1,max=9,value=1,marks={i:"{}".format(i)for i in range(1,10)}),
+                                # html.H6("Split by:"),
+                                # dcc.RadioItems(id='split',options=[{"label":"symbol","value":"symbol"},{"label":"word","value":"word"}],value="word"),
+                                # html.H6("Boundary Condition:"),
+                                # dcc.RadioItems(id='condition',options=[{"label":"no","value":"no"},{"label":"periodic","value":"periodic"},{"label":"ordinary","value":"ordinary"}],value="words"),
+                                html.Br(),
+                                dbc.Button("Analyze", id="chain_button", color="primary", className="w-100", disabled=analyze_visible),
 
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("Window shift"),
-                                                dbc.Input(id="wh", type="number"),
-                                            ], size="md", className="window"
-                                        ),
-
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("Window expansion"),
-                                                dbc.Input(id="we", type="number"),
-                                            ], size="md", className="window"
-                                        ),
-
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("Max window"),
-                                                dbc.Input(id="wm", type="number"),
-                                            ], size="md", className="window"
-                                        ),
-
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.Select(
-                                                    id="def",
-                                                    options=[
-                                                        {"label": "static", "value": "static"},
-                                                        {"label": "dynamic", "value": "dynamic"}
-                                                    ],
-                                                    value="static"
-                                                ),
-                                                dbc.InputGroupText("Definition")
-                                            ], size="md", className="window"
-                                        ),
-
-                                        # dbc.Input(placeholder="size of ngram",type="number"),
-                                        # html.H6("Size of ngram:"),
-                                        # dcc.Slider(id="n_size",min=1,max=9,value=1,marks={i:"{}".format(i)for i in range(1,10)}),
-                                        # html.H6("Split by:"),
-                                        # dcc.RadioItems(id='split',options=[{"label":"symbol","value":"symbol"},{"label":"word","value":"word"}],value="word"),
-                                        # html.H6("Boundary Condition:"),
-                                        # dcc.RadioItems(id='condition',options=[{"label":"no","value":"no"},{"label":"periodic","value":"periodic"},{"label":"ordinary","value":"ordinary"}],value="words"),
-                                        html.Br(),
-                                        dbc.Button("Analyze", id="chain_button", color="primary", className="w-100", disabled=analyze_visible),
-
-                                        dbc.Button("Save data", id="save", color="danger", className="w-100"),
-                                        html.Div(id="temp_seve",
-                                                 children=[]
-                                                 )
-                                    ]),
-                                html.Div(id="alert", children=[])
+                                dbc.Button("Save data", id="save", color="danger", className="w-100"),
+                                html.Div(id="temp_seve",
+                                         children=[]
+                                         )
+                            ]),
+                        html.Div(id="alert", children=[])
                                 # html.H6("Boundary Condition:"),
                                 # dcc.RadioItems(id='condition',options=[{"label":"no","value":"no"},{"label":"periodic","value":"periodic"},{"label":"ordinary","value":"ordinary"}],value="words"),
                             ]
@@ -856,93 +879,128 @@ def is_valid_letter(char):
 length_updated = False
 
 
-@app.callback([Output('upload-status', 'children'),
-               Output('l', 'children'),
-               Output('w', 'value'),
-               Output('wh', 'value'),
-               Output('we', 'value'),
-               Output('wm', 'value')],
-              [Input('upload-data', 'contents')],
-              [State('upload-data', 'filename'),
-               State('split', 'value'),
-               State('def', 'value'),
-               State('n_size', 'value')]
+@app.callback(
+    [Output('upload-status', 'children'),
+     Output('file-selector', 'options')],
+    [Input('upload-data', 'contents')],
+    [State('upload-data', 'filename')]
 )
-def update_upload_status(contents, filename, split, definition, n):
-    global L, data, length_updated
+def update_upload_status(contents, filenames):
+    global uploaded_files
+    
     if contents is None:
-        return html.Div(["No file uploaded"]), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+        # Return current options for file selector
+        options = [{'label': filename, 'value': filename} for filename in uploaded_files.keys()]
+        return html.Div(["No new files uploaded"]), options
     
-    # Parse the uploaded file
-    content_type, content_string = contents.split(',')
-    decoded = base64.b64decode(content_string)
+    # Create a list to store upload status messages
+    upload_status = []
     
-    try:
-        # Try reading as string
-        file = decoded.decode('utf-8')
-        
-        length_updated = False
-        
-        if definition == "dynamic":
-            data = prepere_data(file, n, split)
-            wm = int(L / 10)
-            w = int(wm / 10)
-        else:
-            temp = []
-            if split == "letter":
-                file = re.sub(r'	', '', file)
-                data = remove_punctuation(file)
-                for word in data:
-                    for i in word:
-                        if is_valid_letter(i):
-                            continue
-                        temp.append(i)
-                data = temp
-            if split == "symbol":
-                data = file
-                data = re.sub(r'	', '', file)
-                data = re.sub(r'\n+', '\n', data)
-                data = re.sub(r'\n\s\s', '\n', data)
-                data = re.sub(r'﻿', '', data)
-                for i in data:
-                    if i == " ":
-                        temp.append("space")
-                    elif i == "\n":
-                        temp.append("space")
-                        continue
-                    elif i == "\ufeff":
-                        temp.append("space")
-                        continue
-                    elif i == '﻿' or is_valid_letter(i):
-                        continue
-                    else:
-                        i = i.lower()
-                        temp.append(i)
-
-                data = temp
-
-            if split == "word":
-                file = re.sub(r'\n+', '\n', file)
-                file = re.sub(r'\n\s\s', '\n', file)
-                file = re.sub(r'﻿', '', file)
-                file = re.sub(r'--', ' -', file)
-
-                processor = NgrammProcessor()
-                # обробка тексту
-                processor.preprocess(file)
-
-                # Отримання слів у тексті
-                data = processor.get_words()
-
-            L = len(data)
-            wm = int(L / 20)
-            w = int(wm / 20)
-            length_updated = True
-        
-        return html.Div([f"Uploaded: {filename}", html.Br()]), ["Length: " + str(L)], w, w, w, wm
+    # Process each uploaded file
+    for i, (content, filename) in enumerate(zip(contents, filenames)):
+        try:
+            # Parse the uploaded file
+            content_type, content_string = content.split(',')
+            decoded = base64.b64decode(content_string)
+            
+            # Store the decoded content
+            try:
+                # Try reading as string
+                file_content = decoded.decode('utf-8')
+                uploaded_files[filename] = file_content
+                upload_status.append(html.Div([f"✓ Uploaded: {filename}"], style={'color': 'green'}))
+            except UnicodeDecodeError:
+                upload_status.append(html.Div([f"✗ Error: {filename} is not a valid text file"], style={'color': 'red'}))
+        except Exception as e:
+            upload_status.append(html.Div([f"✗ Error processing {filename}: {str(e)}"], style={'color': 'red'}))
     
-    except Exception as e:
-        return html.Div([f'Error processing file: {str(e)}']), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+    # Create options for file selector dropdown
+    options = [{'label': filename, 'value': filename} for filename in uploaded_files.keys()]
+    
+    return html.Div(upload_status), options
+
+
+# Add callback to handle file selection
+@app.callback(
+    [Output('l', 'children'),
+     Output('w', 'value'),
+     Output('wh', 'value'),
+     Output('we', 'value'),
+     Output('wm', 'value')],
+    [Input('file-selector', 'value')],
+    [State('split', 'value'),
+     State('def', 'value'),
+     State('n_size', 'value')]
+)
+def process_selected_file(selected_filename, split, definition, n):
+    global L, data, length_updated
+    
+    if selected_filename is None or selected_filename not in uploaded_files:
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+    
+    # Get the file content
+    file = uploaded_files[selected_filename]
+    
+    length_updated = False
+    
+    if definition == "dynamic":
+        data = prepere_data(file, n, split)
+        wm = int(L / 10)
+        w = int(wm / 10)
+    else:
+        temp = []
+        if split == "letter":
+            file = re.sub(r'	', '', file)
+            data = remove_punctuation(file)
+            for word in data:
+                for i in word:
+                    if is_valid_letter(i):
+                        continue
+                    temp.append(i)
+            data = temp
+        if split == "symbol":
+            data = file
+            data = re.sub(r'	', '', file)
+            data = re.sub(r'\n+', '\n', data)
+            data = re.sub(r'\n\s\s', '\n', data)
+            data = re.sub(r'﻿', '', data)
+            for i in data:
+                if i == " ":
+                    temp.append("space")
+                elif i == "\n":
+                    temp.append("space")
+                    continue
+                elif i == "\ufeff":
+                    temp.append("space")
+                    continue
+                elif i == '﻿' or is_valid_letter(i):
+                    continue
+                else:
+                    i = i.lower()
+                    temp.append(i)
+
+            data = temp
+
+        if split == "word":
+            file = re.sub(r'\n+', '\n', file)
+            file = re.sub(r'\n\s\s', '\n', file)
+            file = re.sub(r'﻿', '', file)
+            file = re.sub(r'--', ' -', file)
+
+            processor = NgrammProcessor()
+            # обробка тексту
+            processor.preprocess(file)
+
+            # Отримання слів у тексті
+            data = processor.get_words()
+
+        L = len(data)
+        wm = int(L / 20)
+        w = int(wm / 20)
+        length_updated = True
+    
+    return ["Length: " + str(L)], w, w, w, wm
+
 
 def remove_empty_strings(arr):
     return [item for item in arr if item != '\ufeff']
@@ -1512,7 +1570,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                Input("table", "active_cell"),
                Input("table", "page_current"),
                Input("table", "derived_virtual_indices")],
-              [State("upload-data", "filename"),
+              [State("file-selector", "value"),
                State("n_size", "value"),
                State("w", "value"),
                State("wh", "value"),
@@ -1527,7 +1585,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
     if n is None or filename is None:
         return dash.no_update
     else:
-        # The file parameter is now the uploaded filename
+        # The file parameter is now the selected filename
         file = filename
         global df, model, new_ngram
 

@@ -9,9 +9,11 @@ from time import time
 from scipy.optimize import curve_fit
 from string import punctuation
 import dash
-from dash import dcc, html, dash_table as dt
+import dash_core_components as dcc
+import dash_html_components as html
+import dash_table
 from os import listdir
-import plotly.graph_objects as go
+import plotly.graph_objs as go
 import dash_bootstrap_components as dbc
 import re
 import base64
@@ -51,7 +53,7 @@ def remove_punctuation(data):
     # Calculate the execution time
     execution_time = end_time - start_time
 
-    print(f"Execution time: {execution_time} seconds")
+    print("Execution time: {} seconds".format(execution_time))
     return resultt
 
 toast_visible = False
@@ -696,6 +698,9 @@ layout1 = html.Div([
                                         dbc.Button("Save data", id="save", color="danger", className="w-100"),
                                         html.Div(id="temp_seve",
                                                  children=[]
+                                                 ),
+                                        html.Div(id="temp_seve_batch",
+                                                 children=[]
                                                  )
                                     ]),
                                 html.Div(id="alert", children=[])
@@ -729,7 +734,7 @@ layout1 = html.Div([
                                     # here table
                                     html.Div(id="box_tab",
                                              style={"display": "none", "height": "400px", "minHeight": "400px"},
-                                             children=[dbc.Spinner(dt.DataTable(
+                                             children=[dbc.Spinner(dash_table.DataTable(
                                                  id="table",
                                                  columns=[{"name": i, "id": i} for i in
                                                           ['rank', "ngram", "F", "R", "a", "γ", "goodness"]],
@@ -788,7 +793,7 @@ layout1 = html.Div([
                                     # Add batch results table
                                     html.Div([
                                         html.H5("Batch Processing Results", style={'marginTop': '20px'}),
-                                        dbc.Spinner(dt.DataTable(
+                                        dbc.Spinner(dash_table.DataTable(
                                             id="batch_table",
                                             columns=[
                                                 {"name": "No.", "id": "no"},
@@ -977,7 +982,7 @@ def update_upload_status(contents, filenames, n_size):
     
     if contents is None:
         # Return current options for file selector
-        options = [{'label': filename, 'value': filename, 'title': filename} for filename in uploaded_files.keys()]
+        options = [{'label': filename, 'value': filename, 'title': filename} for filename in list(uploaded_files.keys())]
         return html.Div(["No new files uploaded"]), options
     
     # Create a list to store upload status messages
@@ -1021,19 +1026,19 @@ def update_upload_status(contents, filenames, n_size):
                 file_lengths[filename]['letter'] = len(text_letter)
                 
                 upload_status.append(html.Div([
-                    f"✓ Uploaded: {filename}",
+                    "✓ Uploaded: {}".format(filename),
                     html.Br(),
-                    html.Span(f"Words: {file_lengths[filename]['word']} | ", style={"marginLeft": "15px"}),
-                    html.Span(f"Symbols: {file_lengths[filename]['symbol']} | "),
-                    html.Span(f"Letters: {file_lengths[filename]['letter']}")
+                    html.Span("Words: {} | ".format(file_lengths[filename]['word']), style={"marginLeft": "15px"}),
+                    html.Span("Symbols: {} | ".format(file_lengths[filename]['symbol'])),
+                    html.Span("Letters: {}".format(file_lengths[filename]['letter']))
                 ], style={'color': 'green', 'marginBottom': '5px'}))
             except UnicodeDecodeError:
-                upload_status.append(html.Div([f"✗ Error: {filename} is not a valid text file"], style={'color': 'red'}))
+                upload_status.append(html.Div(["✗ Error: {} is not a valid text file".format(filename)], style={'color': 'red'}))
         except Exception as e:
-            upload_status.append(html.Div([f"✗ Error processing {filename}: {str(e)}"], style={'color': 'red'}))
+            upload_status.append(html.Div(["✗ Error processing {}: {}".format(filename, str(e))], style={'color': 'red'}))
     
     # Create options for file selector dropdown, adding title attribute for tooltip
-    options = [{'label': filename, 'value': filename, 'title': filename} for filename in uploaded_files.keys()]
+    options = [{'label': filename, 'value': filename, 'title': filename} for filename in list(uploaded_files.keys())]
     
     return html.Div(upload_status), options
 
@@ -1118,10 +1123,10 @@ def process_selected_file(selected_filename, split, definition, n):
         length_updated = True
     
     # Show all three lengths for the selected file
-    lengths_str = f"Length: {L} ({split}s) | "
+    lengths_str = "Length: {} ({}s) | ".format(L, split)
     for split_type in ['word', 'symbol', 'letter']:
         if split_type != split:
-            lengths_str += f"{split_type}s: {file_lengths[selected_filename][split_type]} | "
+            lengths_str += "{}s: {} | ".format(split_type, file_lengths[selected_filename][split_type])
     lengths_str = lengths_str.rstrip(" | ")
     
     return [lengths_str], w, w, w, wm
@@ -1160,7 +1165,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         return [], {"display": "none"}
     
     # Find Lmin and Lmax for the current split method
-    lengths = [file_lengths[filename][split] for filename in uploaded_files.keys()]
+    lengths = [file_lengths[filename][split] for filename in list(uploaded_files.keys())]
     if not lengths:
         return [], {"display": "none"}
         
@@ -1171,7 +1176,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
     batch_results = []
     
     # Process each file
-    for idx, (filename, file_content) in enumerate(uploaded_files.items(), 1):
+    for idx, (filename, file_content) in enumerate(list(uploaded_files.items()), 1):
         # Calculate F_min based on file length
         file_length = file_lengths[filename][split]
         if lmin == lmax:
@@ -1395,13 +1400,12 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
 
 # Update the batch results table to show window parameters too
 @app.callback(
-    Output("batch_table", "columns", allow_duplicate=True),
-    [Input("batch_process", "n_clicks")],
-    prevent_initial_call=True
+    Output("batch_table", "columns"),
+    [Input("batch_process", "n_clicks")]
 )
 def update_batch_table_columns(n_clicks):
     if n_clicks is None:
-        return dash.no_update
+        raise dash.exceptions.PreventUpdate
     
     columns = [
         {"name": "No.", "id": "no"},
@@ -1428,15 +1432,14 @@ def update_batch_table_columns(n_clicks):
 
 # Add callback to save batch results
 @app.callback(
-    Output("temp_seve", "children", allow_duplicate=True),
+    Output("temp_seve_batch", "children"),  # Changed output ID to avoid conflicts
     [Input("save_batch", "n_clicks")],
     [State("n_size", "value"),
      State("split", "value"),
      State("condition", "value"),
      State("def", "value"),
      State("min_dist_option", "value"),
-     State("overlap_mode", "value")],
-    prevent_initial_call=True
+     State("overlap_mode", "value")]
 )
 def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_option, overlap_mode):
     if n_clicks is None or not batch_results:
@@ -1447,15 +1450,17 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
         df_batch = pd.DataFrame(batch_results)
         
         # Create filename with parameters
-        output_filename = f"saved_data/batch_results_n={n_size},split={split},condition={condition},definition={definition},min_dist={min_dist_option},overlap={overlap_mode}.xlsx"
+        output_filename = "saved_data/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={}.xlsx".format(
+            n_size, split, condition, definition, min_dist_option, overlap_mode)
         
-        # Save to Excel
-        with pd.ExcelWriter(output_filename) as writer:
-            df_batch.to_excel(writer, index=False)
+        # Save to Excel - modify to use older pandas style
+        writer = pd.ExcelWriter(output_filename)
+        df_batch.to_excel(writer, index=False)
+        writer.save()
         
-        return html.Div([f"Saved batch results to {output_filename}"])
+        return html.Div(["Saved batch results to {}".format(output_filename)])
     except Exception as e:
-        return html.Div([f"Error saving batch results: {str(e)}"])
+        return html.Div(["Error saving batch results: {}".format(str(e))])
 
 @app.callback([Output("table", "data"), Output("chain", "figure"),
                Output("box_tab", "style"),
@@ -1624,13 +1629,13 @@ def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option
                     temp_pos.append(i)
             new_ngram.dt = calculate_distance(np.array(temp_pos, dtype=np.uint8), L, condition, ngram, min_dist_option)
             new_ngram.R = round(R(new_ngram.dt), 8)
-            c, _ = curve_fit(fit, [*new_ngram.dfa.keys()], [*new_ngram.dfa.values()], method='lm', maxfev=5000)
+            c, _ = curve_fit(fit, list(new_ngram.dfa.keys()), list(new_ngram.dfa.values()), method='lm', maxfev=5000)
             new_ngram.a = round(c[0], 8)
             new_ngram.gamma = round(c[1], 8)
             new_ngram.temp_dfa = []
             for w in new_ngram.dfa.keys():
                 new_ngram.temp_dfa.append(fit(w, new_ngram.a, new_ngram.gamma))
-            new_ngram.goodness = round(r2_score([*new_ngram.dfa.values()], new_ngram.temp_dfa), 8)
+            new_ngram.goodness = round(r2_score(list(new_ngram.dfa.values()), new_ngram.temp_dfa), 8)
             df = pd.DataFrame()
             df['rank'] = [1]
             df['ngram'] = ['new_ngram']
@@ -2101,9 +2106,10 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
 
         if definition == "dynamic":
             output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(file, fmin, n_size, w, wh, we, wm, opt, definition, min_dist_option, overlap_mode)
-            with pd.ExcelWriter(output_filename) as writer:
-                df_copy.to_excel(writer, index=False) # Use df_copy here
-            # writer.save() # Deprecated
+            # Changed to older pandas style without with context
+            writer = pd.ExcelWriter(output_filename)
+            df_copy.to_excel(writer, index=False)
+            writer.save()
 
             if active_cell and new_ngram: # Check if new_ngram exists
                 # Existing logic for saving new_ngram data...
@@ -2133,44 +2139,48 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
                              # Ensure it's not the filtered 'new_ngram' (though unlikely if active_cell logic is sound)
                              if ngram_to_save_details != 'new_ngram':
 
-                                 details_filename = f"saved_data/{file} {ngram_to_save_details}_details.xlsx"
-                                 with pd.ExcelWriter(details_filename) as writer_details:
-                                     df1 = pd.DataFrame()
-                                     # Check if the ngram exists in the global model (might have been filtered)
-                                     if ngram_to_save_details in model:
-                                         df1["w"] = [*model[ngram_to_save_details].fa.keys()]
-                                         df1['∆F'] = [*model[ngram_to_save_details].fa.values()] # Original code had '∆F', assuming this is correct?
-                                         df1['fit=a*w^b'] = model[ngram_to_save_details].temp_fa
-                                         df1.to_excel(writer_details, index=False)
-                                     # Also save new_ngram specific data
-                                     if new_ngram: # Save new_ngram details if definition is dynamic
-                                         new_ngram_details_filename = f"saved_data/{file} new_ngram_dynamic_details.xlsx"
-                                         with pd.ExcelWriter(new_ngram_details_filename) as writer_new_ngram:
-                                             df_new = pd.DataFrame()
-                                             df_new["w"] = [*new_ngram.dfa.keys()]
-                                             df_new['∆F'] = [*new_ngram.dfa.values()] # Original used ∆F here
-                                             df_new['fit=a*w^b'] = new_ngram.temp_dfa
-                                             df_new.to_excel(writer_new_ngram, index=False)
+                                 details_filename = "saved_data/{} {}_details.xlsx".format(file, ngram_to_save_details)
+                                 # Changed to older pandas style without with context
+                                 writer_details = pd.ExcelWriter(details_filename)
+                                 df1 = pd.DataFrame()
+                                 # Check if the ngram exists in the global model (might have been filtered)
+                                 if ngram_to_save_details in model:
+                                     df1["w"] = list(model[ngram_to_save_details].fa.keys())
+                                     df1['∆F'] = list(model[ngram_to_save_details].fa.values()) # Original code had '∆F', assuming this is correct?
+                                     df1['fit=a*w^b'] = model[ngram_to_save_details].temp_fa
+                                     df1.to_excel(writer_details, index=False)
+                                     writer_details.save()
+                                 # Also save new_ngram specific data
+                                 if new_ngram: # Save new_ngram details if definition is dynamic
+                                     new_ngram_details_filename = "saved_data/{} new_ngram_dynamic_details.xlsx".format(file)
+                                     writer_new_ngram = pd.ExcelWriter(new_ngram_details_filename)
+                                     df_new = pd.DataFrame()
+                                     df_new["w"] = list(new_ngram.dfa.keys())
+                                     df_new['∆F'] = list(new_ngram.dfa.values()) # Original used ∆F here
+                                     df_new['fit=a*w^b'] = new_ngram.temp_dfa
+                                     df_new.to_excel(writer_new_ngram, index=False)
+                                     writer_new_ngram.save()
 
                         else:
-                            print(f"Warning: Selected index {selected_original_index} out of bounds for original DataFrame.")
+                            print("Warning: Selected index {} out of bounds for original DataFrame.".format(selected_original_index))
                     else:
-                         print(f"Warning: Calculated row index {row_index} is invalid for derived indices.")
+                        print("Warning: Calculated row index {} is invalid for derived indices.".format(row_index))
 
                 except Exception as e:
-                    print(f"Error saving detailed ngram file (dynamic): {e}")
+                    print("Error saving detailed ngram file (dynamic): {}".format(e))
                     # Potentially add a Dash alert to inform the user
 
 
-            return [html.Div(f"Saved data to {output_filename}")] # Provide feedback
+            return [html.Div("Saved data to {}".format(output_filename))] # Provide feedback
 
         # Static definition part
         output_filename_static = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
                 file, fmin, n_size, w, wh, we, wm, opt, definition, min_dist_option, overlap_mode
             )
-        with pd.ExcelWriter(output_filename_static) as writer:
-            df_copy.to_excel(writer, index=False) # Use df_copy here
-        # writer.save() # Deprecated
+        # Changed to older pandas style without with context 
+        writer = pd.ExcelWriter(output_filename_static)
+        df_copy.to_excel(writer, index=False)
+        writer.save()
 
         if active_cell:
             # Similar logic as above to get the correct ngram based on original selection state
@@ -2190,23 +2200,24 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
                         if ngram != 'new_ngram':
                             # Check if ngram exists in the model dictionary
                             if ngram in model:
-                                details_filename_static = f"saved_data/{file} {ngram}.xlsx"
-                                with pd.ExcelWriter(details_filename_static) as writer_details:
-                                    df1 = pd.DataFrame()
-                                    df1["w"] = [*model[ngram].fa.keys()]
-                                    df1['∆F'] = [*model[ngram].fa.values()] # Original used ∆F here
-                                    df1['fit=a*w^b'] = model[ngram].temp_fa
-                                    df1.to_excel(writer_details, index=False)
-                                # writer_details.save() # Deprecated
+                                details_filename_static = "saved_data/{} {}.xlsx".format(file, ngram)
+                                # Changed to older pandas style without with context
+                                writer_details = pd.ExcelWriter(details_filename_static)
+                                df1 = pd.DataFrame()
+                                df1["w"] = list(model[ngram].fa.keys())
+                                df1['∆F'] = list(model[ngram].fa.values()) # Original used ∆F here
+                                df1['fit=a*w^b'] = model[ngram].temp_fa
+                                df1.to_excel(writer_details, index=False)
+                                writer_details.save()
                             else:
-                                print(f"Warning: Ngram '{ngram}' selected but not found in model for detail saving.")
+                                print("Warning: Ngram '{}' selected but not found in model for detail saving.".format(ngram))
                      else:
-                        print(f"Warning: Selected index {selected_original_index} out of bounds for original DataFrame (static).")
+                        print("Warning: Selected index {} out of bounds for original DataFrame (static).".format(selected_original_index))
                 else:
-                     print(f"Warning: Calculated row index {row_index} is invalid for derived indices (static).")
+                    print("Warning: Calculated row index {} is invalid for derived indices (static).".format(row_index))
 
             except Exception as e:
-                print(f"Error saving detailed ngram file (static): {e}")
+                print("Error saving detailed ngram file (static): {}".format(e))
                 # Potentially add a Dash alert
 
     # Use the modified df_copy for saving, keep global df potentially unchanged if needed elsewhere
@@ -2219,7 +2230,8 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
 
 if __name__ == "__main__":
     # webbrowser.open_new("http://127.0.0.1:8050/") # Commented out
-    app.run(debug=False)
+    # Replace app.run() with the older style Flask server run for Dash < 2.0
+    app.server.run(host='0.0.0.0', port=8050, debug=False)
 
 # Add callback to toggle batch window settings
 @app.callback(
@@ -2227,4 +2239,4 @@ if __name__ == "__main__":
     [Input("batch_window_mode", "value")]
 )
 def toggle_batch_window_controls(mode):
-    return mode == "custom"
+    return mode in ["ui", "auto"]

@@ -18,6 +18,7 @@ import dash_bootstrap_components as dbc
 import re
 import base64
 import io
+import webbrowser
 
 
 def remove_punctuation_for_words(data):
@@ -2229,7 +2230,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
 # import webbrowser # Commented out as it might cause issues if run non-interactively
 
 if __name__ == "__main__":
-    # webbrowser.open_new("http://127.0.0.1:8050/") # Commented out
+    webbrowser.open_new("http://127.0.0.1:8050/") # Автоматично відкриває браузер
     # Replace app.run() with the older style Flask server run for Dash < 2.0
     app.server.run(host='127.0.0.1', port=8050, debug=False)
 

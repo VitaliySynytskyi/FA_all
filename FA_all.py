@@ -2231,7 +2231,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
 if __name__ == "__main__":
     # webbrowser.open_new("http://127.0.0.1:8050/") # Commented out
     # Replace app.run() with the older style Flask server run for Dash < 2.0
-    app.server.run(host='0.0.0.0', port=8050, debug=False)
+    app.server.run(host='127.0.0.1', port=8050, debug=False)
 
 # Add callback to toggle batch window settings
 @app.callback(

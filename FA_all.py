@@ -485,122 +485,244 @@ layout1 = html.Div([
             dbc.Col(
                 dbc.Card(
                     [
-                        dbc.CardHeader("Configuration:"),
+                        dbc.CardHeader("Configuration:", style={"background-color": "#e9f5fe", "fontWeight": "bold"}),
                         dbc.CardBody(
                             [
-                                html.Label("Upload file:"),
-                                html.Div(
-                                    [
-                                        # Replace dropdown with Upload component
-                                        dcc.Upload(
-                                            id='upload-data',
-                                            children=html.Div([
-                                                'Drag and Drop or ',
-                                                html.A('Select Files')
-                                            ]),
-                                            style={
-                                                'width': '100%',
-                                                'height': '60px',
-                                                'lineHeight': '60px',
-                                                'borderWidth': '1px',
-                                                'borderStyle': 'dashed',
-                                                'borderRadius': '5px',
-                                                'textAlign': 'center',
-                                                'margin': '10px 0'
-                                            },
-                                            multiple=True
-                                        ),
-                                        html.Div(id='upload-status'),
-                                        # Add dropdown for selecting files
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("Select file"),
-                                                dcc.Dropdown(
-                                                    id='file-selector',
-                                                    options=[],
-                                                    placeholder="Select a file to analyze",
-                                                    style={"minWidth": "250px", "maxWidth": "100%", "whiteSpace": "nowrap", "textOverflow": "ellipsis"}
-                                                )
-                                            ], 
-                                            size="md", 
-                                            className="config",
-                                            style={"marginBottom": "10px"}
-                                        ),
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("Size of ngram"),
-                                                dbc.Input(id="n_size", type="number", value=1)
-                                            ], 
-                                            size="md", 
-                                            className="config"
-                                        ),
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("Split by"),
-                                                dbc.Select(
-                                                    id="split",
-                                                    options=[
-                                                        {"label": "symbol", "value": "symbol"},
-                                                        {"label": "word", "value": "word"},
-                                                        {"label": "letter", "value": "letter"}
-                                                    ],
-                                                    value="word"
-                                                )
-                                            ], 
-                                            size="md", 
-                                            className="config"
-                                        ),
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.Select(
-                                                    id="condition",
-                                                    options=[
-                                                        {"label": "no", "value": "no"},
-                                                        {"label": "periodic", "value": "periodic"},
-                                                        {"label": "ordinary", "value": "ordinary"}
-                                                    ],
-                                                    value="no"
-                                                ),
-                                        dbc.InputGroupText("Boundary Condition:")
-                                    ], 
-                                    size="md", 
-                                    className="config"
-                                        ),
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.Select(
-                                                    id="min_dist_option",
-                                                    options=[
-                                                        {"label": "min=1", "value": 1},
-                                                        {"label": "min=0", "value": 0}
-                                                    ],
-                                                    value=1
-                                                ),
-                                        dbc.InputGroupText("Min Distance:")
-                                    ], 
-                                    size="md", 
-                                    className="config"
-                                        ),
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("filter"),
-                                                dbc.Input(id="f_min", type="number", value=0)
-                                            ]
-                                        ),
-                                # Add UI elements for batch processing parameters
+                                # FILE SECTION
                                 html.Div([
-                                    html.H6("Batch Processing Settings", style={'marginTop': '10px'}),
+                                    html.H6("File Selection", 
+                                           className="text-primary text-center mb-2", 
+                                           style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
+                                
+                                    html.Label("Upload file:"),
+                                    html.Div(
+                                        [
+                                            # Replace dropdown with Upload component
+                                            dcc.Upload(
+                                                id='upload-data',
+                                                children=html.Div([
+                                                    'Drag and Drop or ',
+                                                    html.A('Select Files', style={'fontWeight': 'bold', 'color': '#007bff'})
+                                                ]),
+                                                style={
+                                                    'width': '100%',
+                                                    'height': '60px',
+                                                    'lineHeight': '60px',
+                                                    'borderWidth': '1px',
+                                                    'borderStyle': 'dashed',
+                                                    'borderRadius': '5px',
+                                                    'textAlign': 'center',
+                                                    'margin': '10px 0',
+                                                    'background': '#fafafa',
+                                                    'borderColor': '#007bff'
+                                                },
+                                                multiple=True
+                                            ),
+                                            html.Div(id='upload-status'),
+                                            # Add dropdown for selecting files
+                                            dbc.InputGroup(
+                                                [
+                                                    dbc.InputGroupText("Select file"),
+                                                    dcc.Dropdown(
+                                                        id='file-selector',
+                                                        options=[],
+                                                        placeholder="Select a file to analyze",
+                                                        style={"minWidth": "250px", "maxWidth": "100%", "whiteSpace": "nowrap", "textOverflow": "ellipsis"}
+                                                    )
+                                                ], 
+                                                size="md", 
+                                                className="mb-3",
+                                                style={"marginBottom": "10px"}
+                                            ),
+                                        ]),
+                                ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
+                                
+                                # ANALYSIS PARAMETERS SECTION
+                                html.Div([
+                                    html.H6("Analysis Parameters", 
+                                           className="text-primary text-center mb-2", 
+                                           style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
+                                    
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.InputGroupText("Size of ngram"),
+                                            dbc.Input(id="n_size", type="number", value=1, style={"font-weight": "bold"})
+                                        ], 
+                                        size="md", 
+                                        className="mb-2"
+                                    ),
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.InputGroupText("Split by"),
+                                            dbc.Select(
+                                                id="split",
+                                                options=[
+                                                    {"label": "symbol", "value": "symbol"},
+                                                    {"label": "word", "value": "word"},
+                                                    {"label": "letter", "value": "letter"}
+                                                ],
+                                                value="word",
+                                                style={"font-weight": "bold"}
+                                            )
+                                        ], 
+                                        size="md", 
+                                        className="mb-2"
+                                    ),
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.Select(
+                                                id="condition",
+                                                options=[
+                                                    {"label": "no", "value": "no"},
+                                                    {"label": "periodic", "value": "periodic"},
+                                                    {"label": "ordinary", "value": "ordinary"}
+                                                ],
+                                                value="no",
+                                                style={"font-weight": "bold"}
+                                            ),
+                                    dbc.InputGroupText("Boundary Condition:")
+                                ], 
+                                size="md", 
+                                className="mb-2"
+                                    ),
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.Select(
+                                                id="min_dist_option",
+                                                options=[
+                                                    {"label": "min=1", "value": 1},
+                                                    {"label": "min=0", "value": 0}
+                                                ],
+                                                value=1,
+                                                style={"font-weight": "bold"}
+                                            ),
+                                    dbc.InputGroupText("Min Distance:")
+                                ], 
+                                size="md", 
+                                className="mb-2"
+                                    ),
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.InputGroupText("filter"),
+                                            dbc.Input(id="f_min", type="number", value=0, style={"font-weight": "bold"})
+                                        ],
+                                        className="mb-3"
+                                    ),
+                                ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
+                                
+                                # WINDOW SETTINGS SECTION
+                                html.Div([
+                                    html.H6("Window Settings", 
+                                           className="text-primary text-center mb-2", 
+                                           style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
+                                    
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.Select(
+                                                id="overlap_mode",
+                                                options=[
+                                                    {"label": "overlapping", "value": "overlapping"},
+                                                    {"label": "non-overlapping", "value": "non-overlapping"}
+                                                ],
+                                                value="overlapping"
+                                            ),
+                                            dbc.InputGroupText("Window Mode"),
+                                        ], size="md", className="mb-2"
+                                    ),
+                                    
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.Select(
+                                                id="def",
+                                                options=[
+                                                    {"label": "static", "value": "static"},
+                                                    {"label": "dynamic", "value": "dynamic"}
+                                                ],
+                                                value="static"
+                                            ),
+                                            dbc.InputGroupText("Definition", style={"background-color": "#e9f5fe"}),
+                                            dbc.Tooltip(
+                                                "Static: Manual window parameters. Dynamic: Auto-calculated based on data size",
+                                                target="def",
+                                            ),
+                                        ], size="md", className="mb-3"
+                                    ),
+
+                                    html.Div([
+                                        html.Small([
+                                            html.Span("W = Min Window", style={"fontWeight": "bold"}), " | ",
+                                            html.Span("WH = Window Shift", style={"fontWeight": "bold"}), " | ",
+                                            html.Span("WE = Window Expansion", style={"fontWeight": "bold"}), " | ",
+                                            html.Span("WM = Max Window", style={"fontWeight": "bold"})
+                                        ], className="text-muted mb-2 d-block text-center"),
+                                    ], style={"background": "#f0f8ff", "padding": "6px", "borderRadius": "5px", "marginBottom": "10px"}),
+
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.InputGroupText(html.Span(["Min", html.Br(), "Window"], style={"lineHeight": "1.2", "textAlign": "center"}), 
+                                                                 style={"width": "90px", "background-color": "#e9f5fe"}),
+                                            dbc.Input(id="w", type="number", style={"font-weight": "bold"}),
+                                            dbc.Tooltip(
+                                                "Minimum window size (W) - Starting window dimension",
+                                                target="w",
+                                            ),
+                                        ], size="md", className="mb-2"
+                                    ),
+
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.InputGroupText(html.Span(["Window", html.Br(), "Shift"], style={"lineHeight": "1.2", "textAlign": "center"}), 
+                                                                 style={"width": "90px", "background-color": "#e9f5fe"}),
+                                            dbc.Input(id="wh", type="number", style={"font-weight": "bold"}),
+                                            dbc.Tooltip(
+                                                "Window shift (WH) - How far to move window when overlapping",
+                                                target="wh",
+                                            ),
+                                        ], size="md", className="mb-2"
+                                    ),
+
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.InputGroupText(html.Span(["Window", html.Br(), "Expansion"], style={"lineHeight": "1.2", "textAlign": "center"}), 
+                                                                 style={"width": "90px", "background-color": "#e9f5fe"}),
+                                            dbc.Input(id="we", type="number", style={"font-weight": "bold"}),
+                                            dbc.Tooltip(
+                                                "Window expansion (WE) - How much window size increases per step",
+                                                target="we",
+                                            ),
+                                        ], size="md", className="mb-2"
+                                    ),
+
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.InputGroupText(html.Span(["Max", html.Br(), "Window"], style={"lineHeight": "1.2", "textAlign": "center"}), 
+                                                                 style={"width": "90px", "background-color": "#e9f5fe"}),
+                                            dbc.Input(id="wm", type="number", style={"font-weight": "bold"}),
+                                            dbc.Tooltip(
+                                                "Maximum window size (WM) - Largest window dimension",
+                                                target="wm",
+                                            ),
+                                        ], size="md", className="mb-2"
+                                    ),
+                                ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
+
+                                # BATCH PROCESSING SECTION
+                                html.Div([
+                                    html.H6("Batch Processing", 
+                                           className="text-primary text-center mb-2", 
+                                           style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
+                                    
                                     dbc.InputGroup(
                                         [
                                             dbc.InputGroupText("Lmin: Fmin1"),
-                                            dbc.Input(id="fmin1", type="number", value=1)
+                                            dbc.Input(id="fmin1", type="number", value=1, style={"font-weight": "bold"})
                                         ],
                                         style={'marginBottom': '5px'}
                                     ),
                                     dbc.InputGroup(
                                         [
                                             dbc.InputGroupText("Lmax: Fmin2"),
-                                            dbc.Input(id="fmin2", type="number", value=5)
+                                            dbc.Input(id="fmin2", type="number", value=5, style={"font-weight": "bold"})
                                         ],
                                         style={'marginBottom': '5px'}
                                     ),
@@ -626,84 +748,32 @@ layout1 = html.Div([
                                         id="batch_window_controls",
                                         is_open=True
                                     ),
-                                    dbc.Button("Process All Files", id="batch_process", color="success", className="w-100", style={'marginBottom': '10px'})
+                                    dbc.Button("Process All Files", id="batch_process", color="success", 
+                                              className="w-100", 
+                                              style={'marginBottom': '10px', "fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}),
+                                ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
+                                
+                                # ACTION BUTTONS SECTION
+                                html.Div([
+                                    html.H6("Actions", 
+                                           className="text-primary text-center mb-2", 
+                                           style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
+                                    
+                                    dbc.Button("Analyze", id="chain_button", color="primary", 
+                                              className="w-100 mb-2", 
+                                              style={"fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}, 
+                                              disabled=analyze_visible),
+
+                                    dbc.Button("Save data", id="save", color="danger", 
+                                              className="w-100",
+                                              style={"fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}),
+                                    html.Div(id="temp_seve",
+                                             children=[]
+                                             ),
+                                    html.Div(id="temp_seve_batch",
+                                             children=[]
+                                             )
                                 ]),
-                                        html.Label("Sliding window"),
-
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.Select(
-                                                    id="overlap_mode",
-                                                    options=[
-                                                        {"label": "overlapping", "value": "overlapping"},
-                                                        {"label": "non-overlapping", "value": "non-overlapping"}
-                                                    ],
-                                                    value="overlapping"
-                                                ),
-                                                dbc.InputGroupText("Window Mode"),
-                                            ], size="md", className="window"
-                                        ),
-
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("Min window"),
-                                                dbc.Input(id="w", type="number"),
-                                            ], size="md", className="window"
-                                        ),
-
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("Window shift"),
-                                                dbc.Input(id="wh", type="number"),
-                                            ], size="md", className="window"
-                                        ),
-
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("Window expansion"),
-                                                dbc.Input(id="we", type="number"),
-                                            ], size="md", className="window"
-                                        ),
-
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.InputGroupText("Max window"),
-                                                dbc.Input(id="wm", type="number"),
-                                            ], size="md", className="window"
-                                        ),
-
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.Select(
-                                                    id="def",
-                                                    options=[
-                                                        {"label": "static", "value": "static"},
-                                                        {"label": "dynamic", "value": "dynamic"}
-                                                    ],
-                                                    value="static"
-                                                ),
-                                                dbc.InputGroupText("Definition")
-                                            ], size="md", className="window"
-                                        ),
-
-                                        # dbc.Input(placeholder="size of ngram",type="number"),
-                                        # html.H6("Size of ngram:"),
-                                        # dcc.Slider(id="n_size",min=1,max=9,value=1,marks={i:"{}".format(i)for i in range(1,10)}),
-                                        # html.H6("Split by:"),
-                                        # dcc.RadioItems(id='split',options=[{"label":"symbol","value":"symbol"},{"label":"word","value":"word"}],value="word"),
-                                        # html.H6("Boundary Condition:"),
-                                        # dcc.RadioItems(id='condition',options=[{"label":"no","value":"no"},{"label":"periodic","value":"periodic"},{"label":"ordinary","value":"ordinary"}],value="words"),
-                                        html.Br(),
-                                        dbc.Button("Analyze", id="chain_button", color="primary", className="w-100", disabled=analyze_visible),
-
-                                        dbc.Button("Save data", id="save", color="danger", className="w-100"),
-                                        html.Div(id="temp_seve",
-                                                 children=[]
-                                                 ),
-                                        html.Div(id="temp_seve_batch",
-                                                 children=[]
-                                                 )
-                                    ]),
                                 html.Div(id="alert", children=[])
                                 # html.H6("Boundary Condition:"),
                                 # dcc.RadioItems(id='condition',options=[{"label":"no","value":"no"},{"label":"periodic","value":"periodic"},{"label":"ordinary","value":"ordinary"}],value="words"),
@@ -722,11 +792,12 @@ layout1 = html.Div([
                             dbc.CardHeader(
                                 dbc.Tabs(
                                     [
-                                        dbc.Tab(label="DataTable", tab_id="data_table"),
-                                        dbc.Tab(label="MarkovChain", tab_id="markov_chain")
+                                        dbc.Tab(label="DataTable", tab_id="data_table", label_style={"font-weight": "bold"}),
+                                        dbc.Tab(label="MarkovChain", tab_id="markov_chain", label_style={"font-weight": "bold"})
                                     ],
                                     id="dataframe",
-                                    active_tab="data_table"
+                                    active_tab="data_table",
+                                    card=True
                                 )
 
                             ),
@@ -755,39 +826,55 @@ layout1 = html.Div([
                                                  # 'minWidth': 40, 'width': 95, 'maxWidth': 95},
                                                  style_table={"height": "400px", "minWidth": "500px",
                                                               'overflowY': 'auto', "overflowX": "none",
-                                                              "minHeight": "400px"}
+                                                              "minHeight": "400px"},
+                                                 style_header={
+                                                     'backgroundColor': '#e9f5fe',
+                                                     'fontWeight': 'bold',
+                                                     'textAlign': 'center'
+                                                 },
+                                                 style_data_conditional=[
+                                                     {
+                                                         'if': {'row_index': 'odd'},
+                                                         'backgroundColor': '#f9f9f9'
+                                                     },
+                                                     {
+                                                         'if': {'state': 'selected'},
+                                                         'backgroundColor': '#deeaff',
+                                                         'border': '1px solid #aaa'
+                                                     }
+                                                 ]
                                              ))]),
                                     html.Div(id="box_chain",
                                              style={"display": "none"},
                                              children=[dbc.Spinner(dcc.Graph(id="chain", style={"height": "400px"}))]),
 
-                                    dbc.CardHeader("Characteristics", style={"padding": "5px 20px"}),
+                                    dbc.CardHeader("Characteristics", style={"padding": "5px 20px", "background-color": "#f0f8ff", "font-weight": "bold"}),
                                     # here add chars
                                     dbc.CardBody(
                                         dbc.Row([
                                             # NOTE додала вивід 8-ми значень з екселю а також кнопку для копіювання всього
                                             dbc.Col([
-                                                html.Div(["Length: "], id="l", style={"whiteSpace": "nowrap", "width": "100%", "overflow": "hidden", "textOverflow": "ellipsis"}),
-                                                html.Div(["Vocabulary: "], id="v"),
-                                                html.Div(["Time: "], id="t")
+                                                html.Div(["Length: "], id="l", style={"whiteSpace": "nowrap", "width": "100%", "overflow": "hidden", "textOverflow": "ellipsis", "fontWeight": "bold", "padding": "3px"}),
+                                                html.Div(["Vocabulary: "], id="v", style={"fontWeight": "bold", "padding": "3px"}),
+                                                html.Div(["Time: "], id="t", style={"fontWeight": "bold", "padding": "3px"})
 
                                             ], width={"size": 5}),
                                             dbc.Col([
-                                                html.Div([""], id="new_output1", n_clicks=0),
-                                                html.Div([""], id="new_output2", n_clicks=0),
+                                                html.Div([""], id="new_output1", n_clicks=0, style={"padding": "3px"}),
+                                                html.Div([""], id="new_output2", n_clicks=0, style={"padding": "3px"}),
                                             ], width={"size": 2}),
                                             dbc.Col([
-                                                html.Div([""], id="new_output3", n_clicks=0),
-                                                html.Div([""], id="new_output4", n_clicks=0),
+                                                html.Div([""], id="new_output3", n_clicks=0, style={"padding": "3px"}),
+                                                html.Div([""], id="new_output4", n_clicks=0, style={"padding": "3px"}),
                                             ], width={"size": 2}),
                                             dbc.Col([
-                                                html.Div([""], id="new_output5", n_clicks=0),
-                                                html.Div([""], id="new_output6", n_clicks=0),
+                                                html.Div([""], id="new_output5", n_clicks=0, style={"padding": "3px"}),
+                                                html.Div([""], id="new_output6", n_clicks=0, style={"padding": "3px"}),
                                             ], width={"size": 2}),
                                             dbc.Col([
-                                                html.Div([""], id="new_output7", n_clicks=0),
-                                                html.Div([""], id="new_output8", n_clicks=0),
-                                                html.Div([""], id="copy_all", n_clicks=0, style={"fontWeight": "bold", "color": "blue", "cursor": "pointer"})
+                                                html.Div([""], id="new_output7", n_clicks=0, style={"padding": "3px"}),
+                                                html.Div([""], id="new_output8", n_clicks=0, style={"padding": "3px"}),
+                                                html.Div([""], id="copy_all", n_clicks=0, style={"fontWeight": "bold", "color": "#007bff", "cursor": "pointer", "textDecoration": "underline", "padding": "3px"})
                                             ], width={"size": 1}),
                                         ])
                                     ),
@@ -814,9 +901,13 @@ layout1 = html.Div([
                                             ],
                                             style_data={'whiteSpace': 'normal', 'height': 'auto'},
                                             style_cell={'textAlign': 'center'},
-                                            style_header={'fontWeight': 'bold'},
+                                            style_header={'fontWeight': 'bold', 'backgroundColor': '#e9f5fe'},
                                             style_table={"overflowX": "auto"},
                                             style_data_conditional=[
+                                                {
+                                                    'if': {'row_index': 'odd'},
+                                                    'backgroundColor': '#f9f9f9'
+                                                },
                                                 {
                                                     'if': {'row_index': -1},
                                                     'fontWeight': 'bold',
@@ -830,7 +921,8 @@ layout1 = html.Div([
                                             ]
                                         )),
                                         dbc.Button("Save Batch Results", id="save_batch", color="info", 
-                                                  className="mt-2", style={'marginTop': '10px'})
+                                                  className="mt-2", 
+                                                  style={'marginTop': '10px', "fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}),
                                     ], id="batch_results_container", style={"display": "none"})
                                 ]
                             )
@@ -849,17 +941,17 @@ layout1 = html.Div([
                         dbc.CardHeader(
                             dbc.Tabs(
                                 [
-                                    dbc.Tab(label="distribution", tab_id="tab1"),
+                                    dbc.Tab(label="distribution", tab_id="tab1", label_style={"font-weight": "bold"}),
                                 ],
                                 id='card-tabs1',
-                                active_tab="tab1"
+                                active_tab="tab1",
+                                card=True
                             )
                         ),
                         dbc.CardBody([
-                            dcc.Graph(id="graphs")
+                            dcc.Graph(id="graphs", config={'displayModeBar': True, 'displaylogo': False})
 
-                        ])
-
+                        ], style={"background-color": "#fcfcfc"})
                     ], style={"height": "100%", "widht": "100%", "margin-right": "0%", "margin-top": "10px",
                               "margin-left": "0%"}
                 )
@@ -873,11 +965,12 @@ layout1 = html.Div([
                         dbc.CardHeader(
                             dbc.Tabs(
                                 [
-                                    dbc.Tab(label="flunctuacion", tab_id="tab2"),
-                                    dbc.Tab(label="alpha/R", tab_id="tab3")
+                                    dbc.Tab(label="flunctuacion", tab_id="tab2", label_style={"font-weight": "bold"}),
+                                    dbc.Tab(label="alpha/R", tab_id="tab3", label_style={"font-weight": "bold"})
                                 ],
                                 id='card-tabs',
-                                active_tab="tab2"
+                                active_tab="tab2",
+                                card=True
                             )
                         ),
                         dbc.CardBody([
@@ -887,12 +980,14 @@ layout1 = html.Div([
                                     {"label": "linear", "value": "linear"},
                                     {"label": "log", "value": "log"}
                                 ],
-                                value="linear"
-
+                                value="linear",
+                                labelStyle={"marginRight": "15px", "fontWeight": "bold"},
+                                inputStyle={"marginRight": "5px"},
+                                style={"marginBottom": "10px", "backgroundColor": "#f8f9fa", "padding": "8px", "borderRadius": "5px"}
                             ),
-                            dcc.Graph(id="fa")
+                            dcc.Graph(id="fa", config={'displayModeBar': True, 'displaylogo': False})
 
-                        ])
+                        ], style={"background-color": "#fcfcfc"})
 
                     ], style={"height": "100%", "widht": "100%", "padding": "0", "margin-right": "0%",
                               "margin-top": "10px", "margin-left": "0%"}
@@ -2240,7 +2335,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
 if __name__ == "__main__":
     webbrowser.open_new("http://127.0.0.1:8050/") # Автоматично відкриває браузер
     # Replace app.run() with the older style Flask server run for Dash < 2.0
-    app.server.run(host='0.0.0.0', port=8050, debug=False)
+    app.server.run(host='127.0.0.1', port=8050, debug=False)
 
 # Add callback to toggle batch window settings
 @app.callback(

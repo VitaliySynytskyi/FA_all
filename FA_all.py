@@ -986,8 +986,9 @@ def update_upload_status(contents, filenames, n_size):
         options = [{'label': filename, 'value': filename, 'title': filename} for filename in list(uploaded_files.keys())]
         return html.Div(["No new files uploaded"]), options
     
-    # Create a list to store upload status messages
-    upload_status = []
+    # Counters for summary
+    success_count = 0
+    error_count = 0
     
     # Process each uploaded file
     for i, (content, filename) in enumerate(zip(contents, filenames)):
@@ -1026,22 +1027,29 @@ def update_upload_status(contents, filenames, n_size):
                 text_letter = remove_punctuation(file_content)
                 file_lengths[filename]['letter'] = len(text_letter)
                 
-                upload_status.append(html.Div([
-                    "✓ Uploaded: {}".format(filename),
-                    html.Br(),
-                    html.Span("Words: {} | ".format(file_lengths[filename]['word']), style={"marginLeft": "15px"}),
-                    html.Span("Symbols: {} | ".format(file_lengths[filename]['symbol'])),
-                    html.Span("Letters: {}".format(file_lengths[filename]['letter']))
-                ], style={'color': 'green', 'marginBottom': '5px'}))
+                # Print detailed info to console instead of adding to upload_status
+                print(f"✓ Uploaded: {filename}")
+                print(f"  Words: {file_lengths[filename]['word']} | Symbols: {file_lengths[filename]['symbol']} | Letters: {file_lengths[filename]['letter']}")
+                
+                success_count += 1
             except UnicodeDecodeError:
-                upload_status.append(html.Div(["✗ Error: {} is not a valid text file".format(filename)], style={'color': 'red'}))
+                print(f"✗ Error: {filename} is not a valid text file")
+                error_count += 1
         except Exception as e:
-            upload_status.append(html.Div(["✗ Error processing {}: {}".format(filename, str(e))], style={'color': 'red'}))
+            print(f"✗ Error processing {filename}: {str(e)}")
+            error_count += 1
+    
+    # Create summary message for display
+    summary_message = html.Div([
+        html.H5(f"Upload Summary:"),
+        html.P(f"Successfully uploaded: {success_count} file(s)", style={'color': 'green'}),
+        html.P(f"Files with errors: {error_count}", style={'color': 'red' if error_count > 0 else 'green'})
+    ])
     
     # Create options for file selector dropdown, adding title attribute for tooltip
     options = [{'label': filename, 'value': filename, 'title': filename} for filename in list(uploaded_files.keys())]
     
-    return html.Div(upload_status), options
+    return summary_message, options
 
 
 # Add callback to handle file selection
@@ -2232,7 +2240,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
 if __name__ == "__main__":
     webbrowser.open_new("http://127.0.0.1:8050/") # Автоматично відкриває браузер
     # Replace app.run() with the older style Flask server run for Dash < 2.0
-    app.server.run(host='127.0.0.1', port=8050, debug=False)
+    app.server.run(host='0.0.0.0', port=8050, debug=False)
 
 # Add callback to toggle batch window settings
 @app.callback(

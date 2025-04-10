@@ -93,6 +93,7 @@ def make_dataframe(model, fmin=0):
         if ngram == "new_ngram":
             data['F'][i] = sum(model[ngram].bool)
             continue
+
         data["F"][i] = len(model[ngram].pos)
 
     dffff = pd.DataFrame(data=data)
@@ -140,15 +141,23 @@ def make_markov_chain(data, order=1):
                 model['new_ngram'].bool[i] = 1
                 model['new_ngram'].pos.append(i + order)
 
+
             # Connect the last word with the first one
         if data[L] in model:
             model[data[L]].update({data[0]: 1})
         else:
-            model[data[L]] = {data[0]: 1}
+            #model[data[L]] = {data[0]: 1}
+            model[data[L]] = Ngram({data[0]: 1})
+            model[data[L]].pos = []
+            model[data[L]].pos.append(L + order)
+            model[data[L]].bool = np.zeros(L, dtype=np.uint8)
+            model[data[L]].bool[L-1] = 1
 
             # Connect the first word with the last one
         if data[0] in model:
             model[data[0]].update({data[L]: 1})
+            # мені здається, не може бути, щоб data[0] не була в model, тільки
+            # у data[L] є ймовірність не потрапити в модель, якщо це слово єдине і останнє
         else:
             model[data[0]] = {data[L]: 1}
     V = len(model)
@@ -282,7 +291,7 @@ def fit(x, a, b):
     return a * (x ** b)
 
 
-def prepere_data(data, n, split):
+def prepare_data(data, n, split):
     global L
     if n is None:
         return dash.no_update
@@ -943,7 +952,8 @@ class NgrammProcessor:
         if self.ignore_punctuation:
             text = re.sub(r'[^\w\s]', '', text)
         mixed_array = text.split()
-        real_strings = [item for item in mixed_array if isinstance(item, str) and not is_number(item)]
+        #real_strings = [item for item in mixed_array if isinstance(item, str)]# and not is_number(item)]
+        real_strings = [item for item in mixed_array if isinstance(item, str)]
         self.words = real_strings
 
     def get_words(self, remove_empty_entries: bool = False) -> list:
@@ -1062,7 +1072,7 @@ def process_selected_file(selected_filename, split, definition, n):
     length_updated = False
     
     if definition == "dynamic":
-        data = prepere_data(file, n, split)
+        data = prepare_data(file, n, split)
         wm = int(L / 10)
         w = int(wm / 10)
     else:
@@ -1190,7 +1200,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         length_updated = False
         
         if definition == "dynamic":
-            data = prepere_data(file_content, n_size, split)
+            data = prepare_data(file_content, n_size, split)
         else:
             temp = []
             if split == "letter":

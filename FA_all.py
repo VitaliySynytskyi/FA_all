@@ -147,7 +147,11 @@ def make_markov_chain(data, order=1):
         if data[L] in model:
             model[data[L]].update({data[0]: 1})
         else:
-            model[data[L]] = {data[0]: 1}
+            model[data[L]] = Ngram({data[0]: 1})
+            model[data[L]].pos = []
+            model[data[L]].pos.append(L + order)
+            model[data[L]].bool = np.zeros(L, dtype=np.uint8)
+            model[data[L]].bool[L-1] = 1
 
             # Connect the first word with the last one
         if data[0] in model:
@@ -1047,7 +1051,8 @@ class NgrammProcessor:
         if self.ignore_punctuation:
             text = re.sub(r'[^\w\s]', '', text)
         mixed_array = text.split()
-        real_strings = [item for item in mixed_array if isinstance(item, str) and not is_number(item)]
+        real_strings = [item for item in mixed_array if isinstance(item, str)]
+        #real_strings = [item for item in mixed_array if isinstance(item, str) and not is_number(item)]
         self.words = real_strings
 
     def get_words(self, remove_empty_entries: bool = False) -> list:

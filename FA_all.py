@@ -285,7 +285,7 @@ def fit(x, a, b):
     return a * (x ** b)
 
 
-def prepere_data(data, n, split):
+def prepare_data(data, n, split):
     global L
     if n is None:
         return dash.no_update
@@ -796,8 +796,9 @@ layout1 = html.Div([
                                         dbc.Tab(label="MarkovChain", tab_id="markov_chain", label_style={"font-weight": "bold"})
                                     ],
                                     id="dataframe",
-                                    active_tab="data_table",
-                                    card=True
+                                    active_tab="data_table"
+                                    #active_tab="data_table",
+                                    #card=True
                                 )
 
                             ),
@@ -944,8 +945,9 @@ layout1 = html.Div([
                                     dbc.Tab(label="distribution", tab_id="tab1", label_style={"font-weight": "bold"}),
                                 ],
                                 id='card-tabs1',
-                                active_tab="tab1",
-                                card=True
+                                active_tab="tab1"
+                                #active_tab="tab1",
+                                #card=True
                             )
                         ),
                         dbc.CardBody([
@@ -969,8 +971,9 @@ layout1 = html.Div([
                                     dbc.Tab(label="alpha/R", tab_id="tab3", label_style={"font-weight": "bold"})
                                 ],
                                 id='card-tabs',
-                                active_tab="tab2",
-                                card=True
+                                active_tab="tab2"
+                                #active_tab="tab2",
+                                #card=True
                             )
                         ),
                         dbc.CardBody([
@@ -1171,7 +1174,7 @@ def process_selected_file(selected_filename, split, definition, n):
     length_updated = False
     
     if definition == "dynamic":
-        data = prepere_data(file, n, split)
+        data = prepare_data(file, n, split)
         wm = int(L / 10)
         w = int(wm / 10)
     else:
@@ -1299,7 +1302,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         length_updated = False
         
         if definition == "dynamic":
-            data = prepere_data(file_content, n_size, split)
+            data = prepare_data(file_content, n_size, split)
         else:
             temp = []
             if split == "letter":

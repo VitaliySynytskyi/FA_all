@@ -9,12 +9,6 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Копіювання файлів
-COPY . /app/
-
-# Створення директорії для зберігання даних
-RUN mkdir -p /app/saved_data
-
 # Встановлення залежностей Python
 RUN pip install --no-cache-dir \
     dash==1.20.0 \
@@ -28,6 +22,12 @@ RUN pip install --no-cache-dir \
     scikit-learn==0.24.2 \
     openpyxl==3.0.7 \
     matplotlib==3.3.4
+
+# Копіювання файлів
+COPY . /app/
+
+# Створення директорії для зберігання даних
+RUN mkdir -p /app/saved_data
 
 # Відкриття порту для Dash-додатку
 EXPOSE 8050

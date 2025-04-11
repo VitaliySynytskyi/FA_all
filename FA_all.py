@@ -82,7 +82,7 @@ class Ngram(dict):
         plt.show()
 
 
-def make_dataframe(model, fmin=0):
+def make_dataframe(model, fmin=3):
     filtered_data = list(
         filter(lambda x: sum(value for value in model[x].values() if isinstance(value, int)) >= fmin, model))
     if 'new_ngram' not in filtered_data:
@@ -597,26 +597,22 @@ layout1 = html.Div([
                                 size="md", 
                                 className="mb-2"
                                     ),
-                                    dbc.InputGroup(
-                                        [
-                                            dbc.Select(
-                                                id="min_dist_option",
-                                                options=[
-                                                    {"label": "min=1", "value": 1},
-                                                    {"label": "min=0", "value": 0}
-                                                ],
-                                                value=1,
-                                                style={"font-weight": "bold"}
-                                            ),
-                                    dbc.InputGroupText("Min Distance:")
-                                ], 
-                                size="md", 
-                                className="mb-2"
-                                    ),
+                                    dbc.InputGroup([
+                                        dbc.InputGroupText("Min Tau:"),
+                                        dbc.Select(
+                                            id="min_dist_option",
+                                            options=[
+                                                {"label": "0", "value": "0"},
+                                                {"label": "1", "value": "1"}
+                                            ],
+                                            value="1",
+                                            style={"font-weight": "bold"}
+                                        )
+                                    ], className="mb-1"),
                                     dbc.InputGroup(
                                         [
                                             dbc.InputGroupText("filter"),
-                                            dbc.Input(id="f_min", type="number", value=0, style={"font-weight": "bold"})
+                                            dbc.Input(id="f_min", type="number", value=3, min=1, style={"font-weight": "bold"})
                                         ],
                                         className="mb-3"
                                     ),
@@ -624,9 +620,9 @@ layout1 = html.Div([
                                 
                                 # WINDOW SETTINGS SECTION
                                 html.Div([
-                                    html.H6("Window Settings", 
-                                           className="text-primary text-center mb-2", 
-                                           style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
+                                    html.H6("Sliding Window Settings",
+                                            className="text-primary text-center mb-2",
+                                            style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
                                     
                                     dbc.InputGroup(
                                         [
@@ -662,60 +658,36 @@ layout1 = html.Div([
 
                                     html.Div([
                                         html.Small([
-                                            html.Span("W = Min Window", style={"fontWeight": "bold"}), " | ",
-                                            html.Span("WH = Window Shift", style={"fontWeight": "bold"}), " | ",
-                                            html.Span("WE = Window Expansion", style={"fontWeight": "bold"}), " | ",
-                                            html.Span("WM = Max Window", style={"fontWeight": "bold"})
+                                            html.Span("w_min = Min Window", style={"fontWeight": "bold"}), " | ",
+                                            html.Span("w_s = Window Shift", style={"fontWeight": "bold"}), " | ",
+                                            html.Span("w_e = Window Expansion", style={"fontWeight": "bold"}), " | ",
+                                            html.Span("w_max = Max Window", style={"fontWeight": "bold"})
                                         ], className="text-muted mb-2 d-block text-center"),
                                     ], style={"background": "#f0f8ff", "padding": "6px", "borderRadius": "5px", "marginBottom": "10px"}),
 
-                                    dbc.InputGroup(
-                                        [
-                                            dbc.InputGroupText(html.Span(["Min", html.Br(), "Window"], style={"lineHeight": "1.2", "textAlign": "center"}), 
-                                                                 style={"width": "90px", "background-color": "#e9f5fe"}),
-                                            dbc.Input(id="w", type="number", style={"font-weight": "bold"}),
-                                            dbc.Tooltip(
-                                                "Minimum window size (W) - Starting window dimension",
-                                                target="w",
-                                            ),
-                                        ], size="md", className="mb-2"
-                                    ),
-
-                                    dbc.InputGroup(
-                                        [
-                                            dbc.InputGroupText(html.Span(["Window", html.Br(), "Shift"], style={"lineHeight": "1.2", "textAlign": "center"}), 
-                                                                 style={"width": "90px", "background-color": "#e9f5fe"}),
-                                            dbc.Input(id="wh", type="number", style={"font-weight": "bold"}),
-                                            dbc.Tooltip(
-                                                "Window shift (WH) - How far to move window when overlapping",
-                                                target="wh",
-                                            ),
-                                        ], size="md", className="mb-2"
-                                    ),
-
-                                    dbc.InputGroup(
-                                        [
-                                            dbc.InputGroupText(html.Span(["Window", html.Br(), "Expansion"], style={"lineHeight": "1.2", "textAlign": "center"}), 
-                                                                 style={"width": "90px", "background-color": "#e9f5fe"}),
-                                            dbc.Input(id="we", type="number", style={"font-weight": "bold"}),
-                                            dbc.Tooltip(
-                                                "Window expansion (WE) - How much window size increases per step",
-                                                target="we",
-                                            ),
-                                        ], size="md", className="mb-2"
-                                    ),
-
-                                    dbc.InputGroup(
-                                        [
-                                            dbc.InputGroupText(html.Span(["Max", html.Br(), "Window"], style={"lineHeight": "1.2", "textAlign": "center"}), 
-                                                                 style={"width": "90px", "background-color": "#e9f5fe"}),
-                                            dbc.Input(id="wm", type="number", style={"font-weight": "bold"}),
-                                            dbc.Tooltip(
-                                                "Maximum window size (WM) - Largest window dimension",
-                                                target="wm",
-                                            ),
-                                        ], size="md", className="mb-2"
-                                    ),
+                                    dbc.InputGroup([
+                                        dbc.InputGroupText(html.Span(["Min", html.Br(), "Window"], style={"lineHeight": "1.2", "textAlign": "center"}),
+                                                         style={"width": "90px", "background-color": "#e9f5fe"}),
+                                        dbc.Input(id="w_min", type="number", style={"font-weight": "bold"}),
+                                    ], className="mb-2"),
+                                    
+                                    dbc.InputGroup([
+                                        dbc.InputGroupText(html.Span(["Window", html.Br(), "Shift"], style={"lineHeight": "1.2", "textAlign": "center"}),
+                                                         style={"width": "90px", "background-color": "#e9f5fe"}),
+                                        dbc.Input(id="w_s", type="number", style={"font-weight": "bold"}),
+                                    ], className="mb-2"),
+                                    
+                                    dbc.InputGroup([
+                                        dbc.InputGroupText(html.Span(["Window", html.Br(), "Expansion"], style={"lineHeight": "1.2", "textAlign": "center"}),
+                                                         style={"width": "90px", "background-color": "#e9f5fe"}),
+                                        dbc.Input(id="w_e", type="number", style={"font-weight": "bold"}),
+                                    ], className="mb-2"),
+                                    
+                                    dbc.InputGroup([
+                                        dbc.InputGroupText(html.Span(["Max", html.Br(), "Window"], style={"lineHeight": "1.2", "textAlign": "center"}),
+                                                         style={"width": "90px", "background-color": "#e9f5fe"}),
+                                        dbc.Input(id="w_max", type="number", style={"font-weight": "bold"}),
+                                    ], className="mb-3"),
                                 ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
 
                                 # BATCH PROCESSING SECTION
@@ -727,14 +699,14 @@ layout1 = html.Div([
                                     dbc.InputGroup(
                                         [
                                             dbc.InputGroupText("Lmin: Fmin1"),
-                                            dbc.Input(id="fmin1", type="number", value=1, style={"font-weight": "bold"})
+                                            dbc.Input(id="fmin1", type="number", value=3, min=1, style={"font-weight": "bold"})
                                         ],
                                         style={'marginBottom': '5px'}
                                     ),
                                     dbc.InputGroup(
                                         [
                                             dbc.InputGroupText("Lmax: Fmin2"),
-                                            dbc.Input(id="fmin2", type="number", value=5, style={"font-weight": "bold"})
+                                            dbc.Input(id="fmin2", type="number", value=5, min=1, style={"font-weight": "bold"})
                                         ],
                                         style={'marginBottom': '5px'}
                                     ),
@@ -822,7 +794,7 @@ layout1 = html.Div([
                                              children=[dbc.Spinner(dash_table.DataTable(
                                                  id="table",
                                                  columns=[{"name": i, "id": i} for i in
-                                                          ['rank', "ngram", "F", "R", "a", "γ", "goodness"]],
+                                                          ['rank', "ngram", "F", "R", "a", "gamma", "goodness"]],
                                                  style_data={'whiteSpace': 'auto', 'height': 'auto'},
                                                  editable=False,
                                                  filter_action="native",
@@ -907,10 +879,10 @@ layout1 = html.Div([
                                                 {"name": "dR", "id": "dr"},
                                                 {"name": "Rw_avg", "id": "rw_avg"},
                                                 {"name": "dRw", "id": "drw"},
-                                                {"name": "γ_avg", "id": "g_avg"},
-                                                {"name": "dγ", "id": "dg"},
-                                                {"name": "γw_avg", "id": "gw_avg"},
-                                                {"name": "dγw", "id": "dgw"}
+                                                {"name": "gamma_avg", "id": "g_avg"},
+                                                {"name": "dgamma", "id": "dg"},
+                                                {"name": "gammaw_avg", "id": "gw_avg"},
+                                                {"name": "dgammaw", "id": "dgw"}
                                             ],
                                             style_data={'whiteSpace': 'normal', 'height': 'auto'},
                                             style_cell={'textAlign': 'center'},
@@ -1166,10 +1138,10 @@ def update_upload_status(contents, filenames, n_size):
 # Add callback to handle file selection
 @app.callback(
     [Output('l', 'children'),
-     Output('w', 'value'),
-     Output('wh', 'value'),
-     Output('we', 'value'),
-     Output('wm', 'value')],
+     Output('w_min', 'value'),
+     Output('w_s', 'value'),
+     Output('w_e', 'value'),
+     Output('w_max', 'value')],
     [Input('file-selector', 'value'),
      Input('split', 'value')],
     [State('def', 'value'),
@@ -1188,8 +1160,8 @@ def process_selected_file(selected_filename, split, definition, n):
     
     if definition == "dynamic":
         data = prepare_data(file, n, split)
-        wm = int(L / 10)
-        w = int(wm / 10)
+        w_max = int(L / 10)
+        w_min = int(w_max / 10)
     else:
         temp = []
         if split == "letter":
@@ -1238,8 +1210,8 @@ def process_selected_file(selected_filename, split, definition, n):
             data = processor.get_words()
 
         L = len(data)
-        wm = int(L / 20)
-        w = int(wm / 20)
+        w_max = int(L / 20)
+        w_min = int(w_max / 20)
         length_updated = True
     
     # Show all three lengths for the selected file
@@ -1249,7 +1221,7 @@ def process_selected_file(selected_filename, split, definition, n):
             lengths_str += "{}s: {} | ".format(split_type, file_lengths[selected_filename][split_type])
     lengths_str = lengths_str.rstrip(" | ")
     
-    return [lengths_str], w, w, w, wm
+    return [lengths_str], w_min, w_min, w_min, w_max
 
 
 def remove_empty_strings(arr):
@@ -1271,14 +1243,14 @@ new_ngram = None
      State("def", "value"),
      State("min_dist_option", "value"),
      State("overlap_mode", "value"),
-     State("w", "value"),
-     State("wh", "value"),
-     State("we", "value"),
-     State("wm", "value"),
+     State("w_min", "value"),
+     State("w_s", "value"),
+     State("w_e", "value"),
+     State("w_max", "value"),
      State("batch_window_mode", "value")]
 )
 def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definition, min_dist_option, 
-                      overlap_mode, w, wh, we, wm, batch_window_mode):
+                      overlap_mode, w_min, w_s, w_e, w_max, batch_window_mode):
     global batch_results, uploaded_files, file_lengths
     
     if n_clicks is None or not uploaded_files:
@@ -1363,10 +1335,10 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         # Calculate window parameters based on batch settings
         if batch_window_mode == "ui":
             # Use the values from the UI
-            wm_val = int(wm) if wm is not None else int(L / 20)
-            w_val = int(w) if w is not None else int(wm_val / 10)
-            wh_val = int(wh) if wh is not None else w_val
-            we_val = int(we) if we is not None else w_val
+            wm_val = int(w_max) if w_max is not None else int(L / 20)
+            w_val = int(w_s) if w_s is not None else int(wm_val / 10)
+            wh_val = int(w_s) if w_s is not None else w_val
+            we_val = int(w_e) if w_e is not None else w_val
         else:  # auto
             # Calculate based on file length
             if definition == "dynamic":
@@ -1442,7 +1414,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             current_df["ngram"] = temp_ngram
             
         current_df['R'] = temp_R
-        current_df['γ'] = temp_gamma
+        current_df['gamma'] = temp_gamma
         current_df['a'] = temp_a
         current_df['goodness'] = temp_error
         current_df = current_df.sort_values(by="F", ascending=False)
@@ -1459,10 +1431,10 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             Rw_avg = (df_filtered['R'] * df_filtered['w']).sum()
             dRw = np.sqrt((((df_filtered['R'] - Rw_avg) ** 2) * df_filtered['w']).sum())
             
-            gamma_avg = df_filtered['γ'].mean()
-            dgamma = df_filtered['γ'].std()
-            gammaw_avg = (df_filtered['γ'] * df_filtered['w']).sum()
-            dgammaw = np.sqrt((((df_filtered['γ'] - gammaw_avg) ** 2) * df_filtered['w']).sum())
+            gamma_avg = df_filtered['gamma'].mean()
+            dgamma = df_filtered['gamma'].std()
+            gammaw_avg = (df_filtered['gamma'] * df_filtered['w']).sum()
+            dgammaw = np.sqrt((((df_filtered['gamma'] - gammaw_avg) ** 2) * df_filtered['w']).sum())
         else:
             R_avg = dR = Rw_avg = dRw = gamma_avg = dgamma = gammaw_avg = dgammaw = 0
         
@@ -1538,10 +1510,10 @@ def update_batch_table_columns(n_clicks):
         {"name": "dR", "id": "dr"},
         {"name": "Rw_avg", "id": "rw_avg"},
         {"name": "dRw", "id": "drw"},
-        {"name": "γ_avg", "id": "g_avg"},
-        {"name": "dγ", "id": "dg"},
-        {"name": "γw_avg", "id": "gw_avg"},
-        {"name": "dγw", "id": "dgw"},
+        {"name": "gamma_avg", "id": "g_avg"},
+        {"name": "dgamma", "id": "dg"},
+        {"name": "gammaw_avg", "id": "gw_avg"},
+        {"name": "dgammaw", "id": "dgw"},
         {"name": "W", "id": "w_val"},
         {"name": "WH", "id": "wh_val"},
         {"name": "WE", "id": "we_val"},
@@ -1593,10 +1565,10 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
               [Input("chain_button", "n_clicks"),
                Input("dataframe", "active_tab")],
               [State("f_min", "value"),
-               State("w", "value"),
-               State("wh", "value"),
-               State("we", "value"),
-               State("wm", "value"),
+               State("w_min", "value"),
+               State("w_s", "value"),
+               State("w_e", "value"),
+               State("w_max", "value"),
                State("def", "value"),
                State("min_dist_option", "value"),
                State("overlap_mode", "value"),
@@ -1604,7 +1576,7 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
                State("split", "value"),
                State("condition", "value")
                ])
-def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option, overlap_mode, n_size, split, condition):
+def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_dist_option, overlap_mode, n_size, split, condition):
     global length_updated
 
     if n is None:
@@ -1731,15 +1703,20 @@ def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option
     if dataframe == "data_table":
         if definition == "dynamic":
             start = time()
-            windows = list(range(w, wm, we))
+            # Add safety checks for None values
+            w_s_val = w_s if w_s is not None else 5
+            w_max_val = w_max if w_max is not None else 100
+            w_e_val = w_e if w_e is not None else 5
+            
+            windows = list(range(w_s_val, w_max_val, w_e_val))
             # 2. create newNgram
 
-            new_ngram = newNgram(data, wh, L)
+            new_ngram = newNgram(data, w_s_val, L)
             for w in windows:
                 if overlap_mode == "overlapping":
                     new_ngram.func(w)
                 else:
-                    new_ngram.func(w, overlap_mode=overlap_mode, min_window=w, window_expansion=we)
+                    new_ngram.func(w, overlap_mode=overlap_mode, min_window=w_s_val, window_expansion=w_e_val)
             # calculate coefs
             temp_v = []
             temp_pos = []
@@ -1762,7 +1739,7 @@ def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option
             df["F"] = [len(temp_pos)]
             df['R'] = [new_ngram.R]
             df["a"] = [new_ngram.a]
-            df["γ"] = [new_ngram.gamma]
+            df["gamma"] = [new_ngram.gamma]
             df['goodness'] = [new_ngram.goodness]
             V = len(temp_v)
 
@@ -1776,16 +1753,25 @@ def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option
                 model[ngram].dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_option)
 
             def func(wind):
+                # Safety checks for None values
+                w_s_val = w_s if w_s is not None else 5
+                w_e_val = w_e if w_e is not None else 5
+                
                 if overlap_mode == "overlapping":
-                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=wh, overlap_mode=overlap_mode)
+                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=w_s_val, overlap_mode=overlap_mode)
                 else:
                     # Для non-overlapping mode
-                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=wh, 
-                                                            overlap_mode=overlap_mode, min_window=w, window_expansion=we)
+                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=w_s_val, 
+                                                            overlap_mode=overlap_mode, min_window=w_s_val, window_expansion=w_e_val)
                 
                 model[ngram].fa[wind] = mse(model[ngram].counts[wind])
 
-            windows = list(range(w, wm, we))
+            # Add safety checks for None values
+            w_s_val = w_s if w_s is not None else 5
+            w_max_val = w_max if w_max is not None else 100
+            w_e_val = w_e if w_e is not None else 5
+            
+            windows = list(range(w_s_val, w_max_val, w_e_val))
 
             temp_gamma = []
             temp_R = []
@@ -1838,7 +1824,7 @@ def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option
             #     NOTE через ці змінні в циклі які оновлюються по порядку і потім записуються напряму ж в колонку,
             #     неможливо просто так розділити
             df['R'] = temp_R
-            df['γ'] = temp_gamma
+            df['gamma'] = temp_gamma
             df['a'] = temp_a
             df['goodness'] = temp_error
             df = df.sort_values(by="F", ascending=False)
@@ -1872,13 +1858,18 @@ clikced_ngram = None
                Input("scale", "value"),
                Input("fa", "clickData"),
                Input("graphs", "clickData"),
-               Input("wh", "value")],
+               Input("w_max", "value")],
               [State("n_size", "value"),
                State("def", "value"), ])
 def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, ids, clicked_data, scale, fa_click,
-                graph_click, wh, n,
+                graph_click, w_max, n,
                 definition):
     global model, df, L, g, new_ngram, ngram
+    
+    # Safety checks for window parameters
+    w_s = 5  # default value if not available
+    w_e = 5  # default value if not available
+    
     if df is None:
         return dash.no_update, dash.no_update
 
@@ -1916,7 +1907,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                 if fa_click:
                     if overlap_mode == "overlapping":
                         fig.add_trace(
-                            go.Bar(x=np.arange(wh, L, wh), y=model[ngram].counts[fa_click["points"][0]["x"]], name="∑∆w"))
+                            go.Bar(x=np.arange(w_s, L, w_s), y=model[ngram].counts[fa_click["points"][0]["x"]], name="∑∆w"))
                     else:
                         # Для non-overlapping режиму потрібно розрахувати положення барів
                         bar_positions = []
@@ -1925,7 +1916,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                         ww = fa_click["points"][0]["x"]
                         while i < L - ww:
                             bar_positions.append(i)
-                            shift = calc_non_overlapping_shift(k, w, we)
+                            shift = calc_non_overlapping_shift(k, w_s, w_e)
                             i += shift
                             k += 1
                         fig.add_trace(go.Bar(x=bar_positions, y=model[ngram].counts[ww], name="∑∆w"))
@@ -1950,7 +1941,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                 if fa_click:
                     if overlap_mode == "overlapping":
                         fig.add_trace(
-                            go.Bar(x=np.arange(wh, L, wh), y=model[ngram].counts[fa_click["points"][0]["x"]], name="∑∆w"))
+                            go.Bar(x=np.arange(w_s, L, w_s), y=model[ngram].counts[fa_click["points"][0]["x"]], name="∑∆w"))
                     else:
                         # Для non-overlapping режиму потрібно розрахувати положення барів
                         bar_positions = []
@@ -1959,7 +1950,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                         ww = fa_click["points"][0]["x"]
                         while i < L - ww:
                             bar_positions.append(i)
-                            shift = calc_non_overlapping_shift(k, w, we)
+                            shift = calc_non_overlapping_shift(k, w_s, w_e)
                             i += shift
                             k += 1
                         fig.add_trace(go.Bar(x=bar_positions, y=model[ngram].counts[ww], name="∑∆w"))
@@ -1969,7 +1960,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                 hover_data = []
                 for data in df['ngram']:
                     hover_data.append("".join(data))
-                fig1.add_trace(go.Scatter(x=df["R"], y=df["γ"], mode="markers", text=hover_data))
+                fig1.add_trace(go.Scatter(x=df["R"], y=df["gamma"], mode="markers", text=hover_data))
                 fig1.add_trace(go.Scatter(x=[model[ngram].R],
                                           y=[model[ngram].gamma],
                                           mode="markers",
@@ -1995,7 +1986,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                     ## add bar
                     if fa_click:
                         if overlap_mode == "overlapping":
-                            fig.add_trace(go.Bar(x=np.arange(wh, L, wh), y=new_ngram.count[fa_click["points"][0]["x"]],
+                            fig.add_trace(go.Bar(x=np.arange(w_s, L, w_s), y=new_ngram.count[fa_click["points"][0]["x"]],
                                                 name="∑∆w"))
                         else:
                             # Для non-overlapping режиму потрібно розрахувати положення барів
@@ -2005,7 +1996,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                             ww = fa_click["points"][0]["x"]
                             while i < L - ww:
                                 bar_positions.append(i)
-                                shift = calc_non_overlapping_shift(k, w, we)
+                                shift = calc_non_overlapping_shift(k, w_s, w_e)
                                 i += shift
                                 k += 1
                             fig.add_trace(go.Bar(x=bar_positions, y=new_ngram.count[ww], name="∑∆w"))
@@ -2029,7 +2020,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
 
                 if fa_click:
                     if overlap_mode == "overlapping":
-                        fig.add_trace(go.Bar(x=np.arange(wh, L, wh), y=model[ngram].counts[fa_click["points"][0]["x"]],
+                        fig.add_trace(go.Bar(x=np.arange(w_s, L, w_s), y=model[ngram].counts[fa_click["points"][0]["x"]],
                                              name="∑∆w"))
                     else:
                         # Для non-overlapping режиму потрібно розрахувати положення барів
@@ -2038,7 +2029,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                         i = 0
                         while i < L - ww:
                             bar_positions.append(i)
-                            shift = calc_non_overlapping_shift(k, w, we)
+                            shift = calc_non_overlapping_shift(k, w_s, w_e)
                             i += shift
                             k += 1
                         fig.add_trace(go.Bar(x=bar_positions, y=model[ngram].counts[ww], name="∑∆w"))
@@ -2071,9 +2062,9 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                 if definition == "dynamic":
                     if fa_click:
                         fig.add_trace(
-                            go.Bar(x=np.arange(wh, L, wh), y=new_ngram.count[fa_click["points"][0]["x"]], name="∑∆w"))
+                            go.Bar(x=np.arange(w_s, L, w_s), y=new_ngram.count[fa_click["points"][0]["x"]], name="∑∆w"))
 
-                    fig1.add_trace(go.Scatter(x=new_ngram.R, y=new_ngram.gamma, mode='marekers', hover_data=["new_ngram"]))
+                    fig1.add_trace(go.Scatter(x=new_ngram.R, y=new_ngram.gamma, mode='markers', hover_data=["new_ngram"]))
                     fig1.update_xaxes(type=scale)
                     fig1.update_yaxes(type=scale)
                     fig1.update_layout(hovermode="x unified")
@@ -2096,7 +2087,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                     ww = fa_click['points'][0]["x"]
                     # HERE ww-1
                     if overlap_mode == "overlapping":
-                        fig.add_trace(go.Bar(x=np.arange(ww, L, wh), y=model[ngram].counts[ww], name="∑∆w"))
+                        fig.add_trace(go.Bar(x=np.arange(ww, L, w_s), y=model[ngram].counts[ww], name="∑∆w"))
                     else:
                         # Для non-overlapping режиму потрібно розрахувати положення барів
                         bar_positions = []
@@ -2104,7 +2095,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                         i = 0
                         while i < L - ww:
                             bar_positions.append(i)
-                            shift = calc_non_overlapping_shift(k, w, we)
+                            shift = calc_non_overlapping_shift(k, w_s, w_e)
                             i += shift
                             k += 1
                         fig.add_trace(go.Bar(x=bar_positions, y=model[ngram].counts[ww], name="∑∆w"))
@@ -2115,11 +2106,11 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
 
                 graph_click = None
 
-                fig1.add_trace(go.Scatter(x=df["R"], y=df["γ"], mode="markers", text=hover_data))
+                fig1.add_trace(go.Scatter(x=df["R"], y=df["gamma"], mode="markers", text=hover_data))
                 # fig1.add_trace(go.Scatter(x=[df['R'][active_cell['row']]],
                 fig1.add_trace(go.Scatter(x=[df['R'][ids[active_cell['row']]]],
                                           # y=[df["b"][active_cell['row']]],
-                                          y=[df["γ"][ids[active_cell['row']]]],
+                                          y=[df["gamma"][ids[active_cell['row']]]],
                                           mode="markers",
                                           text=' '.join(ngram),
                                           marker=dict(
@@ -2147,16 +2138,16 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                Input("table", "derived_virtual_indices")],
               [State("file-selector", "value"),
                State("n_size", "value"),
-               State("w", "value"),
-               State("wh", "value"),
-               State("we", "value"),
-               State("wm", "value"),
+               State("w_min", "value"),
+               State("w_s", "value"),
+               State("w_e", "value"),
+               State("w_max", "value"),
                State("f_min", "value"),
                State("condition", "value"),
                State("def", "value"),
                State("min_dist_option", "value"),
                State("overlap_mode", "value")])
-def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmin, opt, definition, min_dist_option, overlap_mode):
+def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w_max, fmin, opt, definition, min_dist_option, overlap_mode):
     if n is None or filename is None:
         return dash.no_update
     else:
@@ -2189,10 +2180,10 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
             Rw_avg = (df_copy['R'] * df_copy['w']).sum()
             dRw = np.sqrt((((df_copy['R'] - Rw_avg) ** 2) * df_copy['w']).sum())
 
-            gamma_avg = df_copy['γ'].mean()
-            dgamma = df_copy['γ'].std()
-            gammaw_avg = (df_copy['γ'] * df_copy['w']).sum()
-            dgammaw = np.sqrt((((df_copy['γ'] - gammaw_avg) ** 2) * df_copy['w']).sum())
+            gamma_avg = df_copy['gamma'].mean()
+            dgamma = df_copy['gamma'].std()
+            gammaw_avg = (df_copy['gamma'] * df_copy['w']).sum()
+            dgammaw = np.sqrt((((df_copy['gamma'] - gammaw_avg) ** 2) * df_copy['w']).sum())
 
             # Assign calculated values using .loc to avoid SettingWithCopyWarning
             df_copy.loc[:, 'R_avg'] = None
@@ -2204,14 +2195,14 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
             df_copy.loc[:, 'dRw'] = None
             df_copy.loc[df_copy.index[0], 'dRw'] = dRw
 
-            df_copy.loc[:, 'γ_avg'] = None
-            df_copy.loc[df_copy.index[0], 'γ_avg'] = gamma_avg
-            df_copy.loc[:, 'dγ'] = None
-            df_copy.loc[df_copy.index[0], 'dγ'] = dgamma
-            df_copy.loc[:, 'γw_avg'] = None
-            df_copy.loc[df_copy.index[0], 'γw_avg'] = gammaw_avg
-            df_copy.loc[:, 'dγw'] = None
-            df_copy.loc[df_copy.index[0], 'dγw'] = dgammaw
+            df_copy.loc[:, 'gamma_avg'] = None
+            df_copy.loc[df_copy.index[0], 'gamma_avg'] = gamma_avg
+            df_copy.loc[:, 'dgamma'] = None
+            df_copy.loc[df_copy.index[0], 'dgamma'] = dgamma
+            df_copy.loc[:, 'gammaw_avg'] = None
+            df_copy.loc[df_copy.index[0], 'gammaw_avg'] = gammaw_avg
+            df_copy.loc[:, 'dgammaw'] = None
+            df_copy.loc[df_copy.index[0], 'dgammaw'] = dgammaw
 
             # Remove temporary 'w' column if not needed in the final output
             df_copy = df_copy.drop(columns=['w'])
@@ -2225,7 +2216,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
 
 
         if definition == "dynamic":
-            output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(file, fmin, n_size, w, wh, we, wm, opt, definition, min_dist_option, overlap_mode)
+            output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(file, fmin, n_size, w_s, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
             # Changed to older pandas style without with context
             writer = pd.ExcelWriter(output_filename)
             df_copy.to_excel(writer, index=False)
@@ -2295,7 +2286,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
 
         # Static definition part
         output_filename_static = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
-                file, fmin, n_size, w, wh, we, wm, opt, definition, min_dist_option, overlap_mode
+                file, fmin, n_size, w_s, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode
             )
         # Changed to older pandas style without with context 
         writer = pd.ExcelWriter(output_filename_static)
@@ -2351,7 +2342,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w, wh, we, wm, fmi
 if __name__ == "__main__":
     webbrowser.open_new("http://127.0.0.1:8050/") # Автоматично відкриває браузер
     # Replace app.run() with the older style Flask server run for Dash < 2.0
-    app.server.run(host='127.0.0.1', port=8050, debug=False)
+    app.server.run(host='0.0.0.0', port=8050, debug=False)
 
 # Add callback to toggle batch window settings
 @app.callback(

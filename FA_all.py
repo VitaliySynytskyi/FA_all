@@ -250,7 +250,7 @@ def calc_non_overlapping_shift(k, min_window, window_expansion):
     else:
         return min_window + (k-1) * window_expansion
 
-@njit(fastmath=True)
+#@njit(fastmath=True)
 def make_windows(x, wi, l, wsh, overlap_mode="overlapping", min_window=None, window_expansion=None):
     sums = []
     if overlap_mode == "overlapping":
@@ -259,6 +259,10 @@ def make_windows(x, wi, l, wsh, overlap_mode="overlapping", min_window=None, win
             sums.append(np.sum(x[i:i + wi]))
     else:  # non-overlapping режим
         # Перевіряємо значення параметрів і встановлюємо значення за замовчуванням якщо None
+        """
+        здається, це не зовсім той алгоритм, тут виходить, що лівий край вікна зсовується далі від правого краю попереднього вікна,
+        а не стає впритик
+
         if min_window is None:
             min_window = wsh
         if window_expansion is None:
@@ -271,7 +275,11 @@ def make_windows(x, wi, l, wsh, overlap_mode="overlapping", min_window=None, win
             # Розраховуємо зміщення для наступного вікна
             shift = calc_non_overlapping_shift(k, min_window, window_expansion)
             i += shift
-            k += 1
+            print(i)
+            k += 1"""
+
+        for i in range(0, l - wi, wi):
+            sums.append(np.sum(x[i:i + wi]))
     
     return np.array(sums)
 

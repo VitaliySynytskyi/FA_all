@@ -1,4 +1,5 @@
 import numbers
+from typing import List, Tuple, Optional
 
 import numpy as np
 from numba import jit, njit
@@ -297,125 +298,138 @@ def fit(x, a, b):
     return a * (x ** b)
 
 
-def prepare_data(data, n, split):
+def prepare_data(data: str, n: int, split: str) -> List:
+    """
+    Підготовка даних для аналізу, розбиття на n-грами залежно від вказаних параметрів.
+    
+    Args:
+        data: Вхідний текст для обробки
+        n: Розмір n-грами
+        split: Метод розбиття тексту ("word", "letter", "symbol")
+        
+    Returns:
+        List: Список підготовлених даних
+    """
     global L
     if n is None:
         return dash.no_update
-    temp_data = []
+    
+    # Попередня обробка тексту
+    data = re.sub(r'\n+', '\n', data)
+    data = re.sub(r'\n\s\s', '\n', data)
+    data = re.sub(r'﻿', '', data)
+    
+    # Для n=1 (одиничні елементи)
     if n == 1:
         if split == "word":
-            temp = []
-            data = re.sub(r'\n+', '\n', data)
-            data = re.sub(r'\n\s\s', '\n', data)
-            data = re.sub(r'﻿', '', data)
+            # Обробка тексту для слів
             data = re.sub(r'--', ' -', data)
             processor = NgrammProcessor()
-            # обробка тексту
             processor.preprocess(data)
-            # Отримання слів у тексті
-            data = processor.get_words()
-
-            for i in data:
-                temp.append(i)
+            temp = processor.get_words()
             L = len(temp)
             return temp
-        if split == 'letter':
+            
+        elif split == 'letter':
+            # Обробка для літер
             data = remove_punctuation(data)
+            temp_data = []
             for i in data:
                 for j in i:
-                    if is_valid_letter(j):
-                        continue
-                    temp_data.append(j)
-            data = temp
-        if split == 'symbol':
-            data = re.sub(r'\n+', '\n', data)
-            data = re.sub(r'\n\s\s', '\n', data)
-            data = re.sub(r'﻿', '', data)
+                    if not is_valid_letter(j):
+                        temp_data.append(j)
+            L = len(temp_data)
+            return temp_data
+            
+        elif split == 'symbol':
+            # Обробка для символів
+            temp_data = []
             for i in data:
                 for j in i:
-                    if j == " ":
+                    if j == " " or j == "\n" or j == "\ufeff":
                         temp_data.append("space")
-                        continue
-                    elif i == "\n":
-                        temp_data.append("space")
-                        continue
-                    elif i == "\ufeff":
-                        temp_data.append("space")
-                        continue
-                    j = j.lower()
-                    temp_data.append(j)
-            data = temp_data
-            L = len(data)
-            return data
-    if n > 1:
+                    else:
+                        temp_data.append(j.lower())
+            L = len(temp_data)
+            return temp_data
+    
+    # Для n>1 (n-грами)
+    else:
+        temp_data = []
+        
         if split == "word":
-            # data = data.split()
-            # data = remove_empty_strings(data)
-            data = re.sub(r'\n+', '\n', data)
-            data = re.sub(r'\n\s\s', '\n', data)
-            data = re.sub(r'﻿', '', data)
+            # Обробка для n-грам слів
             data = re.sub(r'--', ' -', data)
             processor = NgrammProcessor()
-            # обробка тексту
             processor.preprocess(data)
-            # Отримання слів у тексті
             data = processor.get_words()
             L = len(data)
-            # L = len(data) - n
-            for i in range(L):
+            
+            for i in range(L - n + 1):
                 window = tuple(data[i: i + n])
                 temp_data.append(window)
-            return temp_data
-        if split == "letter":
+                
+        elif split == "letter":
+            # Обробка для n-грам літер
             data = remove_punctuation(data.split())
             data = remove_empty_strings(data)
+            letter_data = []
+            
+            for word in data:
+                for char in word:
+                    if not is_valid_letter(char):
+                        letter_data.append(char)
+                        
+            L = len(letter_data)
+            
+            for i in range(L - n + 1):
+                window = tuple(letter_data[i: i + n])
+                temp_data.append(window)
+                
+        elif split == 'symbol':
+            # Обробка для n-грам символів
+            symbol_data = []
+            
             for i in data:
                 for j in i:
-                    if is_valid_letter(j):
-                        continue
-                    temp_data.append(j)
-            L = len(temp_data)
-            data = temp_data
-            temp_data = []
-            for i in range(L):
-                window = tuple(data[i: i + n])
+                    if j == " " or j == "\n" or j == "\ufeff":
+                        symbol_data.append("space")
+                    else:
+                        symbol_data.append(j.lower())
+                        
+            L = len(symbol_data)
+            
+            for i in range(L - n + 1):
+                window = tuple(symbol_data[i: i + n])
                 temp_data.append(window)
-            return temp_data
-        if split == 'symbol':
-            temp_data = []
-            data = re.sub(r'\n+', '\n', data)
-            data = re.sub(r'\n\s\s', '\n', data)
-            data = re.sub(r'﻿', '', data)
-            for i in data:
-                for j in i:
-                    if j == " ":
-                        temp_data.append("space")
-                        continue
-                    elif i == "\n":
-                        temp_data.append("space")
-                        continue
-                    elif i == "\ufeff":
-                        temp_data.append("space")
-                        continue
-                    j = j.lower()
-                    temp_data.append(j)
-            data = temp_data
-            temp_data = []
-            L = len(data)
-            # L = len(data) - n
-            for i in range(L):
-                window = tuple(data[i:i + n])
-                temp_data.append(window)
-            return temp_data
+                
+        return temp_data
 
 
-# @jit(nopython=True)
-def dfa(data, args, overlap_mode="overlapping", min_window=None, window_expansion=None):
+def dfa(data: List, args: Tuple[int, int, int], 
+       overlap_mode: str = "overlapping", 
+       min_window: Optional[int] = None, 
+       window_expansion: Optional[int] = None) -> np.ndarray:
+    """
+    Виконує аналіз флуктуацій (DFA) для даних.
+    
+    Args:
+        data: Вхідні дані для аналізу
+        args: Кортеж (розмір вікна, зсув вікна, довжина даних)
+        overlap_mode: Режим перекриття вікон ("overlapping" або "non-overlapping")
+        min_window: Мінімальний розмір вікна для режиму non-overlapping
+        window_expansion: Значення розширення вікна для режиму non-overlapping
+        
+    Returns:
+        np.ndarray: Масив результатів DFA аналізу
+    """
     wi, wh, l = args
     
     if overlap_mode == "overlapping":
         # Стандартний режим з фіксованим зміщенням
-        count = np.empty(len(range(0, l - wi, wh)), dtype=np.uint8)
+        window_count = len(range(0, l - wi, wh))
+        count = np.zeros(window_count, dtype=np.uint8)
+        
         for index, i in enumerate(range(0, l - wi, wh)):
             temp_v = []
             x = []
@@ -433,7 +447,7 @@ def dfa(data, args, overlap_mode="overlapping", min_window=None, window_expansio
         if window_expansion is None:
             window_expansion = wh
             
-        # Оцінюємо кількість вікон
+        # Оцінюємо кількість і розташування вікон
         k = 1
         i = 0
         window_positions = []
@@ -443,7 +457,7 @@ def dfa(data, args, overlap_mode="overlapping", min_window=None, window_expansio
             i += shift
             k += 1
             
-        count = np.empty(len(window_positions), dtype=np.uint8)
+        count = np.zeros(len(window_positions), dtype=np.uint8)
         for index, i in enumerate(window_positions):
             temp_v = []
             x = []
@@ -454,8 +468,8 @@ def dfa(data, args, overlap_mode="overlapping", min_window=None, window_expansio
                     temp_v.append(ngram)
                     x.append(1)
             count[index] = s(np.array(x, dtype=np.uint8))
-            
-    return count, mse(count)
+    
+    return count
 
 
 class newNgram():
@@ -1013,42 +1027,87 @@ import plotly.express as px
 from sklearn.metrics import r2_score
 import networkx as nx
 
-def is_number(s):
+def is_number(s: str) -> bool:
+    """
+    Перевіряє, чи можна рядок перетворити в число.
+    
+    Args:
+        s: Рядок для перевірки
+        
+    Returns:
+        bool: True, якщо рядок може бути перетворений у число, інакше False
+    """
     try:
         float(s)
         return True
-    except ValueError:
+    except (ValueError, TypeError):
         return False
 
 # NOTE клас із С# для обробки слів
 class NgrammProcessor:
+    """
+    Клас для обробки тексту і отримання n-грам.
+    """
     def __init__(self, ignore_punctuation: bool = True):
+        """
+        Ініціалізує процесор n-грам.
+        
+        Args:
+            ignore_punctuation: Чи ігнорувати пунктуацію при обробці
+        """
         self.ignore_punctuation = ignore_punctuation
         self.words = []
-
-    def preprocess(self, text: str):
-        # Remove punctuation if needed
+        self.processed_text = ""
+        
+    def preprocess(self, text: str) -> None:
+        """
+        Попередня обробка тексту.
+        
+        Args:
+            text: Вхідний текст для обробки
+        """
+        # Видаляємо пунктуацію, якщо потрібно
         if self.ignore_punctuation:
-            text = re.sub(r'[^\w\s]', '', text)
-        mixed_array = text.split()
-        real_strings = [item for item in mixed_array if isinstance(item, str)]
-        #real_strings = [item for item in mixed_array if isinstance(item, str) and not is_number(item)]
-        self.words = real_strings
-
-    def get_words(self, remove_empty_entries: bool = False) -> list:
-        words = self.words
+            # Використовуємо оптимізований метод видалення пунктуації
+            self.processed_text = ''.join(char for char in text if char not in punctuation or char == '-' or char == "'")
+        else:
+            self.processed_text = text
+            
+        # Розбиваємо текст на слова
+        self.words = [word.lower() for word in re.findall(r'\b\w+(?:[-\']\w+)*\b', self.processed_text)]
+        
+    def get_words(self, remove_empty_entries: bool = False) -> List[str]:
+        """
+        Отримує список слів із обробленого тексту.
+        
+        Args:
+            remove_empty_entries: Чи видаляти порожні рядки
+            
+        Returns:
+            List[str]: Список слів
+        """
         if remove_empty_entries:
-            words = [word for word in words if word]
-        words = [word.lower() for word in words]
-        return words
+            return [word for word in self.words if word]
+        return self.words
 
 
-def is_valid_letter(char):
+def is_valid_letter(char: str) -> bool:
+    """
+    Перевіряє, чи є символ допустимою літерою для аналізу.
+    
+    Args:
+        char: Символ для перевірки
+        
+    Returns:
+        bool: True, якщо символ НЕ є допустимою літерою (тобто, має бути пропущений),
+              False, якщо символ Є допустимою літерою (тобто, має бути збережений)
+              
+    Note:
+        Функція має зворотну логіку: повертає True для символів, які слід ПРОПУСТИТИ,
+        і False для символів, які слід ВКЛЮЧИТИ в аналіз.
+    """
     invalid_characters = [' ', '\n', '\ufeff', '°', '"', '„', '–']
-    if is_number(char) or char in invalid_characters:
-        return True
-    else:
-        return False
+    return is_number(char) or char in invalid_characters
 
 
 length_updated = False
@@ -1224,8 +1283,17 @@ def process_selected_file(selected_filename, split, definition, n):
     return [lengths_str], w_min, w_min, w_min, w_max
 
 
-def remove_empty_strings(arr):
-    return [item for item in arr if item != '\ufeff']
+def remove_empty_strings(arr: List[str]) -> List[str]:
+    """
+    Видаляє порожні рядки та спеціальні символи з списку.
+    
+    Args:
+        arr: Список рядків для обробки
+        
+    Returns:
+        List[str]: Список без порожніх рядків та спеціальних символів
+    """
+    return [item for item in arr if item and item != '\ufeff']
 
 new_ngram = None
 

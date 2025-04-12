@@ -1,62 +1,139 @@
 import numbers
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any, Union
+import gc  # Garbage Collector для кращого управління пам'яттю
 
 import numpy as np
-from numba import jit, njit
-import matplotlib.pyplot as plt
+from numba import jit, njit, prange
 import pandas as pd
-import openpyxl
-from time import time
 from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
+
+# Обробка даних і тексту
+import re
 from string import punctuation
+from time import time
+import openpyxl
+
+# Dash і візуалізація
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_table
-from os import listdir
-import plotly.graph_objs as go
 import dash_bootstrap_components as dbc
-import re
+import plotly.graph_objs as go
+
+# Системні і допоміжні бібліотеки
 import base64
 import io
+from os import listdir
 import webbrowser
+from dash.dependencies import Input, Output, State
+import plotly.express as px
+from sklearn.metrics import r2_score
+import networkx as nx
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
+import numba
+
+# Функція для очищення пам'яті
+def clear_memory(keep: List[str] = []):
+    """
+    Очищує пам'ять від великих структур даних, які більше не потрібні.
+    
+    Args:
+        keep: Список назв змінних, які потрібно зберегти
+    """
+    global model, df, new_ngram
+    
+    # Очищення великих глобальних структур даних
+    if 'model' not in keep and 'model' in globals():
+        if isinstance(model, dict):
+            # Зберігаємо тільки необхідні записи, якщо такі є
+            keys_to_keep = []
+            for var in keep:
+                if var in model:
+                    keys_to_keep.append(var)
+            
+            # Очищуємо непотрібні ключі
+            keys_to_remove = [k for k in list(model.keys()) if k not in keys_to_keep]
+            for key in keys_to_remove:
+                if key in model:
+                    del model[key]
+    
+    # Очищення DataFrame
+    if 'df' not in keep and 'df' in globals() and df is not None:
+        df = None
+    
+    # Очищення об'єкта newNgram
+    if 'new_ngram' not in keep and 'new_ngram' in globals() and new_ngram is not None:
+        new_ngram = None
+    
+    # Викликаємо збирач сміття для звільнення пам'яті
+    gc.collect()
+    
+# Кешування для покращення продуктивності
+def memoize(func):
+    """
+    Декоратор для кешування результатів функцій, щоб уникнути повторних обчислень.
+    """
+    cache = {}
+    
+    def wrapper(*args, **kwargs):
+        # Створюємо унікальний ключ на основі аргументів
+        key = str(args) + str(kwargs)
+        if key not in cache:
+            cache[key] = func(*args, **kwargs)
+        return cache[key]
+    
+    # Додаємо функцію для очищення кешу
+    wrapper.clear_cache = lambda: cache.clear()
+    return wrapper
 
 
 def remove_punctuation_for_words(data):
-    # Split the text into words using regular expression
-    words = re.findall(r'\b\w+(?:[-\']\w+)*\b', data)
-
-    # Further process the words to handle special characters
-    processed_words = []
+    """
+    Розбиває текст на слова та видаляє знаки пунктуації.
+    
+    Args:
+        data: Вхідний текст
+        
+    Returns:
+        List[str]: Список оброблених слів
+    """
+    # Використовуємо ефективніший регулярний вираз один раз
+    words = re.findall(r'\b[a-zA-Z0-9]+(?:[-\'][a-zA-Z0-9]+)*\b', data.lower())
+    
+    # Обробляємо слова з дефісами та апострофами
+    result = []
     for word in words:
-        # Handle special characters and dashes within words
-        processed_word = re.split(r'[^a-zA-Z0-9\']', word)
-        processed_words.extend(processed_word)
-
-    # Filter out empty strings and lowercase each word
-    processed_words = [word.lower() for word in processed_words if word]
-
-    return processed_words
+        if '-' in word or '\'' in word:
+            # Розділяємо слово на підчастини за спеціальними символами
+            parts = re.split(r'[-\']', word)
+            # Додаємо лише непорожні частини
+            result.extend([part for part in parts if part])
+        else:
+            result.append(word)
+    
+    return result
 
 
 def remove_punctuation(data):
-    temp = []
-    start_time = time()
-    print()
-    # print(data)
-    for i in range(len(data)):
-        if data[i] in punctuation:
-            continue
-        else:
-            temp.append(data[i].lower())
-    resultt = "".join(temp)
-    end_time = time()
-
-    # Calculate the execution time
-    execution_time = end_time - start_time
-
-    print("Execution time: {} seconds".format(execution_time))
-    return resultt
+    """
+    Видаляє знаки пунктуації з тексту та перетворює його на нижній регістр.
+    
+    Args:
+        data: Вхідний текст
+        
+    Returns:
+        str: Текст без знаків пунктуації
+    """
+    # Використовуємо ефективніший підхід з множиною знаків пунктуації
+    punctuation_set = set(punctuation)
+    
+    # Використовуємо списковий вираз для кращої продуктивності
+    result = ''.join(char.lower() for char in data if char not in punctuation_set)
+    
+    return result
 
 toast_visible = False
 error_visible = False
@@ -84,35 +161,75 @@ class Ngram(dict):
 
 
 def make_dataframe(model, fmin=3):
+    """
+    Створює DataFrame для відображення результатів аналізу.
+    
+    Args:
+        model: Словник моделі з n-грамами
+        fmin: Мінімальна частота для включення n-грами в аналіз
+        
+    Returns:
+        pd.DataFrame: DataFrame з результатами
+    """
+    # Фільтруємо n-грами за мінімальною частотою
     filtered_data = list(
         filter(lambda x: sum(value for value in model[x].values() if isinstance(value, int)) >= fmin, model))
-    if 'new_ngram' not in filtered_data:
+    
+    # Додаємо new_ngram, якщо вона існує в моделі
+    if 'new_ngram' not in filtered_data and 'new_ngram' in model:
         filtered_data.append("new_ngram")
+        
+    # Створюємо структуру даних для DataFrame
     data = {"ngram": [],
             "F": np.empty(len(filtered_data), dtype=np.dtype(int))}
 
+    # Заповнюємо дані
     for i, ngram in enumerate(filtered_data):
         data["ngram"].append(ngram)
 
-        if ngram == "new_ngram":
+        if ngram == "new_ngram" and hasattr(model[ngram], 'bool'):
             data['F'][i] = sum(model[ngram].bool)
-            continue
-        data["F"][i] = len(model[ngram].pos)
+        elif ngram == "new_ngram":
+            # Якщо атрибут bool відсутній, встановлюємо значення за замовчуванням
+            data['F'][i] = 0
+        elif hasattr(model[ngram], 'pos'):
+            data["F"][i] = len(model[ngram].pos)
+        else:
+            data["F"][i] = 0
 
+    # Створюємо DataFrame з даних
     dffff = pd.DataFrame(data=data)
     return dffff
 
 
-def make_markov_chain(data, order=1):
+@memoize
+def make_markov_chain(data: List, order: int = 1) -> Dict[str, Ngram]:
+    """
+    Створює ланцюг Маркова з вхідних даних.
+    
+    Args:
+        data: Список елементів для побудови ланцюга Маркова
+        order: Порядок ланцюга Маркова (кількість попередніх елементів для прогнозу)
+        
+    Returns:
+        Dict[str, Ngram]: Модель ланцюга Маркова у вигляді словника n-грам
+    """
     global model, L, V
+    
+    # Створюємо новий словник моделі
     model = dict()
     L = len(data) - order
+    
+    # Ініціалізуємо спеціальну n-граму для нових елементів
     model['new_ngram'] = Ngram()
-    model['new_ngram'].bool = np.zeros(L, dtype=np.uint8)
+    model['new_ngram'].bool = np.zeros(L, dtype=np.uint8)  # використовуємо uint8 для зменшення пам'яті
     model['new_ngram'].pos = []
+    
+    # Використовуємо більш ефективний алгоритм для побудови ланцюга Маркова
     if order > 1:
         for i in range(L - 1):
             window = tuple(data[i: i + order])  # Додаємо в словник
+            
             if window in model:  # Приєднуємо до вже існуючого розподілу
                 model[window].update([data[i + order]])
                 model[window].pos.append(i + 1)
@@ -126,117 +243,225 @@ def make_markov_chain(data, order=1):
                 model['new_ngram'].bool[i] = 1
                 model['new_ngram'].pos.append(i + 1)
     else:
+        # Попередньо визначаємо множину унікальних елементів для оптимізації
+        unique_items = set(data)
+        
+        # Ініціалізуємо модель для кожного унікального елемента
+        for item in unique_items:
+            model[item] = Ngram()
+            model[item].pos = []
+            model[item].bool = np.zeros(L, dtype=np.uint8)
+        
+        # Заповнюємо модель
         for i in range(L):
-            if data[i] in model:  # Приєднуємо до вже існуючого розподілу
-                model[data[i]].update([data[i + order]])
-                model[data[i]].pos.append(i + order)
-                try:
-                    model[data[i]].bool[i] = 1
-                except Exception:
-                    print('Wait for symbol calculation')
-            else:
-                model[data[i]] = Ngram([data[i + order]])
-                model[data[i]].pos = []
-                model[data[i]].pos.append(i + order)
-                model[data[i]].bool = np.zeros(L, dtype=np.uint8)
-                model[data[i]].bool[i] = 1
-
+            item = data[i]
+            next_item = data[i + order]
+            
+            model[item].update([next_item])
+            model[item].pos.append(i + order)
+            model[item].bool[i] = 1
+            
+            if i == 0:  # Перший елемент
                 model['new_ngram'].bool[i] = 1
                 model['new_ngram'].pos.append(i + order)
 
-            # Connect the last word with the first one
-        if data[L] in model:
-            model[data[L]].update({data[0]: 1})
-        else:
-            model[data[L]] = Ngram({data[0]: 1})
-            model[data[L]].pos = []
+        # З'єднуємо останнє слово з першим та перше з останнім
+        model[data[L]].update([data[0]])
+        if data[L] not in model[data[L]].pos:
             model[data[L]].pos.append(L + order)
             model[data[L]].bool = np.zeros(L, dtype=np.uint8)
             model[data[L]].bool[L-1] = 1
-
-            # Connect the first word with the last one
-        if data[0] in model:
-            model[data[0]].update({data[L]: 1})
-        else:
-            model[data[0]] = {data[L]: 1}
+        
+        model[data[0]].update([data[L]])
+        
     V = len(model)
+    return model
 
 
-def calculate_distance(positions, L, option, ngram, min_dist=1):
+def calculate_distance(positions: np.ndarray, L: int, option: str, ngram: str, min_dist: int = 1) -> np.ndarray:
+    """
+    Розраховує відстані між позиціями елементів з урахуванням граничних умов.
+    
+    Оптимізована для роботи з великими наборами даних за допомогою паралельної обробки.
+    
+    Args:
+        positions: Масив позицій елементів
+        L: Довжина тексту
+        option: Тип граничних умов ("no", "ordinary", "periodic")
+        ngram: Назва n-грами
+        min_dist: Мінімальна відстань (0 або 1)
+        
+    Returns:
+        np.ndarray: Масив відстаней між елементами
+    """
+    # Оптимізуємо обробку масиву позицій
+    positions = np.array(positions, dtype=np.int32)
+    
+    # Переконуємося, що min_dist є цілим числом
+    if not isinstance(min_dist, int):
+        try:
+            min_dist = int(min_dist)
+        except (ValueError, TypeError):
+            print(f"Warning: min_dist '{min_dist}' is not an integer. Using default min_dist=1")
+            min_dist = 1
+    
+    # Використовуємо оптимізовані функції відповідно до граничних умов
     if option == "no":
-        return nbc(positions, min_dist)
-    if option == "ordinary":
-        return obc(positions, L, min_dist)
-    if option == "periodic":
-        return pbc(positions, L, ngram, min_dist)
+        distances = nbc(positions, L, min_dist)
+    elif option == "periodic":
+        distances = pbc(positions, L, min_dist)
+    else:  # "ordinary"
+        distances = obc(positions, L, min_dist)
+    
+    return distances
 
 
-@jit(nopython=True)
-def nbc(positions, min_dist=1):
-    number_of_pos = len(positions)
-    if number_of_pos == 1:
-        return positions
-    dt = np.empty(number_of_pos - 1, dtype=np.uint32)
-    for i in range(number_of_pos - 1):
-        dt[i] = positions[i + 1] - positions[i]
-        if min_dist == 0:
-            dt[i] = dt[i] - 1
+@njit(parallel=True)
+def nbc(pos, L, min_dist=1):
+    """
+    Обчислює відстані без граничних умов.
+    
+    Оптимізовано за допомогою Numba JIT з паралельною обробкою.
+    
+    Args:
+        pos: Масив позицій елементів
+        L: Довжина послідовності
+        min_dist: Мінімальна відстань
+        
+    Returns:
+        np.ndarray: Масив відстаней
+    """
+    n = len(pos)
+    dt = np.zeros(n - 1, dtype=np.int32)
+    
+    for i in prange(n - 1):
+        dt[i] = pos[i + 1] - pos[i]
+        if dt[i] < min_dist:
+            dt[i] = min_dist
+    
+    return dt
+
+
+@njit(parallel=True)
+def pbc(pos, L, min_dist=1):
+    """
+    Обчислює відстані з періодичними граничними умовами.
+    
+    Оптимізовано за допомогою Numba JIT з паралельною обробкою.
+    
+    Args:
+        pos: Масив позицій елементів
+        L: Довжина послідовності
+        min_dist: Мінімальна відстань
+        
+    Returns:
+        np.ndarray: Масив відстаней
+    """
+    n = len(pos)
+    dt = np.zeros(n, dtype=np.int32)
+    
+    for i in prange(n - 1):
+        dt[i] = pos[i + 1] - pos[i]
+        if dt[i] > L // 2:
+            dt[i] = L - dt[i]
+        if dt[i] < min_dist:
+            dt[i] = min_dist
+    
+    # Останній елемент обчислюємо окремо через періодичність
+    dt[n - 1] = L - pos[n - 1] + pos[0]
+    if dt[n - 1] > L // 2:
+        dt[n - 1] = L - dt[n - 1]
+    if dt[n - 1] < min_dist:
+        dt[n - 1] = min_dist
+    
+    return dt
+
+
+@njit(parallel=True)
+def obc(pos, L, min_dist=1):
+    """
+    Обчислює відстані зі звичайними граничними умовами.
+    
+    Оптимізовано за допомогою Numba JIT з паралельною обробкою.
+    
+    Args:
+        pos: Масив позицій елементів
+        L: Довжина послідовності
+        min_dist: Мінімальна відстань
+        
+    Returns:
+        np.ndarray: Масив відстаней
+    """
+    n = len(pos)
+    dt = np.zeros(n, dtype=np.int32)
+    
+    for i in prange(n - 1):
+        dt[i] = pos[i + 1] - pos[i]
+        if dt[i] < min_dist:
+            dt[i] = min_dist
+    
+    # Останній елемент обчислюємо окремо
+    dt[n - 1] = L - pos[n - 1] + pos[0]
+    if dt[n - 1] < min_dist:
+        dt[n - 1] = min_dist
+    
     return dt
 
 
 @jit(nopython=True)
-def obc(positions, L, min_dist=1):
-    number_of_pos = len(positions)
-    dt = np.empty(number_of_pos + 1, dtype=np.uint32)
-    dt[0] = positions[0]
-    if min_dist == 0 and dt[0] > 0:
-        dt[0] = dt[0] - 1
-    for i in range(number_of_pos - 1):
-        dt[i + 1] = positions[i + 1] - positions[i]
-        if min_dist == 0:
-            dt[i + 1] = dt[i + 1] - 1
-    dt[-1] = L - positions[-1]
-    if min_dist == 0 and dt[-1] > 0:
-        dt[-1] = dt[-1] - 1
-    return dt
-
-
-@jit(nopython=True)
-def pbc(positions, L, test, min_dist=1):
-    number_of_pos = len(positions)
-    dt = np.zeros(number_of_pos, dtype=np.uint32)
-    for i in range(number_of_pos - 1):
-        dt[i] = positions[i + 1] - positions[i]
-        if min_dist == 0:
-            dt[i] = dt[i] - 1
-    dt[-1] = L - positions[-1] + positions[0]
-    if min_dist == 0 and dt[-1] > 0:
-        dt[-1] = dt[-1] - 1
-    return dt
-
-
-@jit(nopython=True)
-def s(window):
-    suma = 0
-    for i in range(len(window)):
-        suma += window[i]
-    return suma
+def s(window: np.ndarray) -> int:
+    """
+    Обчислює суму значень вікна.
+    
+    Args:
+        window: Масив значень
+        
+    Returns:
+        int: Сума значень
+    """
+    # Використовуємо оптимізовану NumPy функцію
+    return np.sum(window)
 
 
 @njit(fastmath=True)
-def mse(x):
-    t = x.mean()
-    st = np.mean(x ** 2)
-    return np.sqrt(st - (t ** 2))
+def mse(x: np.ndarray) -> float:
+    """
+    Обчислює середньоквадратичну похибку (MSE) набору значень.
+    
+    Args:
+        x: Масив значень
+        
+    Returns:
+        float: Значення MSE
+    """
+    if len(x) == 0:
+        return 0.0
+        
+    # Оптимізоване обчислення MSE
+    mean_x = np.mean(x)
+    return np.sqrt(np.mean((x - mean_x) ** 2))
 
 
 @jit(nopython=True, fastmath=True)
-def R(x):
-    if len(x) == 1:
+def R(x: np.ndarray) -> float:
+    """
+    Обчислює коефіцієнт варіації.
+    
+    Args:
+        x: Масив значень
+        
+    Returns:
+        float: Значення коефіцієнта варіації
+    """
+    if len(x) <= 1:
         return 0.0
-    t = np.mean(x)
-    ts = np.std(x)
-    return ts / t
+        
+    # Оптимізоване обчислення коефіцієнта варіації
+    mean_x = np.mean(x)
+    if mean_x == 0:  # Запобігаємо діленню на нуль
+        return 0.0
+    std_x = np.std(x)
+    return std_x / mean_x
 
 
 @njit(fastmath=True)
@@ -251,38 +476,57 @@ def calc_non_overlapping_shift(k, min_window, window_expansion):
     else:
         return min_window + (k-1) * window_expansion
 
-#@njit(fastmath=True)
-def make_windows(x, wi, l, wsh, overlap_mode="overlapping", min_window=None, window_expansion=None):
-    sums = []
-    if overlap_mode == "overlapping":
-        # Стандартний режим з фіксованим зміщенням
-        for i in range(0, l - wi, wsh):
-            sums.append(np.sum(x[i:i + wi]))
-    else:  # non-overlapping режим
-        # Перевіряємо значення параметрів і встановлюємо значення за замовчуванням якщо None
-        """
-        здається, це не зовсім той алгоритм, тут виходить, що лівий край вікна зсовується далі від правого краю попереднього вікна,
-        а не стає впритик
-
-        if min_window is None:
-            min_window = wsh
-        if window_expansion is None:
-            window_expansion = wsh
-            
-        k = 1
-        i = 0
-        while i < l - wi:
-            sums.append(np.sum(x[i:i + wi]))
-            # Розраховуємо зміщення для наступного вікна
-            shift = calc_non_overlapping_shift(k, min_window, window_expansion)
-            i += shift
-            print(i)
-            k += 1"""
-
-        for i in range(0, l - wi, wi):
-            sums.append(np.sum(x[i:i + wi]))
+@njit(fastmath=True)
+def make_windows(x: np.ndarray, wi: int, l: int, wsh: int, 
+                overlap_mode: str = "overlapping", 
+                min_window: Optional[int] = None, 
+                window_expansion: Optional[int] = None) -> np.ndarray:
+    """
+    Створює вікна для аналізу даних.
     
-    return np.array(sums)
+    Args:
+        x: Вхідний масив даних
+        wi: Розмір вікна
+        l: Довжина даних
+        wsh: Величина зсуву вікна
+        overlap_mode: Режим перекриття вікон ("overlapping" або "non-overlapping")
+        min_window: Мінімальний розмір вікна для режиму non-overlapping
+        window_expansion: Значення розширення вікна для режиму non-overlapping
+        
+    Returns:
+        np.ndarray: Масив сум у вікнах
+    """
+    # Використовуємо Numba для оптимізації
+    if overlap_mode == "overlapping":
+        # Визначаємо кількість вікон заздалегідь для уникнення повторного обчислення
+        num_windows = (l - wi) // wsh + 1
+        sums = np.zeros(num_windows, dtype=np.float64)
+        
+        # Використовуємо ефективніший цикл
+        for i in range(num_windows):
+            start_idx = i * wsh
+            end_idx = start_idx + wi
+            # Використовуємо вбудовану функцію sum у NumPy
+            sums[i] = np.sum(x[start_idx:end_idx])
+            
+    else:  # non-overlapping режим
+        # Використовуємо правильні значення за замовчуванням
+        min_win = wi if min_window is None else min_window
+        win_exp = wi if window_expansion is None else window_expansion
+        
+        # Визначаємо кількість вікон
+        num_windows = (l - wi) // wi + 1
+        sums = np.zeros(num_windows, dtype=np.float64)
+        
+        # Використовуємо ефективніший цикл для non-overlapping
+        for i in range(num_windows):
+            start_idx = i * wi
+            end_idx = start_idx + wi
+            if end_idx > l:
+                end_idx = l
+            sums[i] = np.sum(x[start_idx:end_idx])
+    
+    return sums
 
 
 @njit(fastmath=True)
@@ -298,6 +542,7 @@ def fit(x, a, b):
     return a * (x ** b)
 
 
+@memoize
 def prepare_data(data: str, n: int, split: str) -> List:
     """
     Підготовка даних для аналізу, розбиття на n-грами залежно від вказаних параметрів.
@@ -314,7 +559,7 @@ def prepare_data(data: str, n: int, split: str) -> List:
     if n is None:
         return dash.no_update
     
-    # Попередня обробка тексту
+    # Використовуємо спільний код попередньої обробки для всіх типів
     data = re.sub(r'\n+', '\n', data)
     data = re.sub(r'\n\s\s', '\n', data)
     data = re.sub(r'﻿', '', data)
@@ -322,88 +567,104 @@ def prepare_data(data: str, n: int, split: str) -> List:
     # Для n=1 (одиничні елементи)
     if n == 1:
         if split == "word":
-            # Обробка тексту для слів
+            # Обробка тексту для слів - використовуємо NgrammProcessor
             data = re.sub(r'--', ' -', data)
             processor = NgrammProcessor()
             processor.preprocess(data)
-            temp = processor.get_words()
-            L = len(temp)
-            return temp
+            result = processor.get_words()
+            L = len(result)
+            return result
             
         elif split == 'letter':
-            # Обробка для літер
-            data = remove_punctuation(data)
-            temp_data = []
-            for i in data:
-                for j in i:
-                    if not is_valid_letter(j):
-                        temp_data.append(j)
-            L = len(temp_data)
-            return temp_data
+            # Обробка для літер - оптимізуємо для зменшення використання пам'яті
+            result = []
+            processed = remove_punctuation(data)
+            for char in processed:
+                if not is_valid_letter(char):
+                    result.append(char)
+            L = len(result)
+            # Звільняємо пам'ять
+            del processed
+            return result
             
         elif split == 'symbol':
-            # Обробка для символів
-            temp_data = []
-            for i in data:
-                for j in i:
-                    if j == " " or j == "\n" or j == "\ufeff":
-                        temp_data.append("space")
-                    else:
-                        temp_data.append(j.lower())
-            L = len(temp_data)
-            return temp_data
+            # Обробка для символів - ефективніше обробляємо символи
+            result = []
+            for char in data:
+                if char == " " or char == "\n" or char == "\ufeff":
+                    result.append("space")
+                else:
+                    result.append(char.lower())
+            L = len(result)
+            return result
     
     # Для n>1 (n-грами)
     else:
-        temp_data = []
-        
         if split == "word":
             # Обробка для n-грам слів
             data = re.sub(r'--', ' -', data)
             processor = NgrammProcessor()
             processor.preprocess(data)
-            data = processor.get_words()
-            L = len(data)
+            words = processor.get_words()
+            L = len(words)
             
+            # Створюємо n-грами з слів
+            result = []
             for i in range(L - n + 1):
-                window = tuple(data[i: i + n])
-                temp_data.append(window)
+                window = tuple(words[i:i + n])
+                result.append(window)
+            
+            # Звільняємо пам'ять
+            del processor
+            del words
+            return result
                 
         elif split == "letter":
             # Обробка для n-грам літер
-            data = remove_punctuation(data.split())
-            data = remove_empty_strings(data)
-            letter_data = []
+            processed = remove_punctuation(data.split())
+            processed = [item for item in processed if item]  # Видаляємо порожні рядки
             
-            for word in data:
+            letter_data = []
+            for word in processed:
                 for char in word:
                     if not is_valid_letter(char):
                         letter_data.append(char)
-                        
+            
             L = len(letter_data)
             
+            # Створюємо n-грами з літер
+            result = []
             for i in range(L - n + 1):
-                window = tuple(letter_data[i: i + n])
-                temp_data.append(window)
+                window = tuple(letter_data[i:i + n])
+                result.append(window)
+            
+            # Звільняємо пам'ять
+            del processed
+            del letter_data
+            return result
                 
         elif split == 'symbol':
             # Обробка для n-грам символів
             symbol_data = []
+            for char in data:
+                if char == " " or char == "\n" or char == "\ufeff":
+                    symbol_data.append("space")
+                else:
+                    symbol_data.append(char.lower())
             
-            for i in data:
-                for j in i:
-                    if j == " " or j == "\n" or j == "\ufeff":
-                        symbol_data.append("space")
-                    else:
-                        symbol_data.append(j.lower())
-                        
             L = len(symbol_data)
             
+            # Створюємо n-грами з символів
+            result = []
             for i in range(L - n + 1):
-                window = tuple(symbol_data[i: i + n])
-                temp_data.append(window)
-                
-        return temp_data
+                window = tuple(symbol_data[i:i + n])
+                result.append(window)
+            
+            # Звільняємо пам'ять
+            del symbol_data
+            return result
+    
+    return []
 
 
 def dfa(data: List, args: Tuple[int, int, int], 
@@ -1023,6 +1284,9 @@ g = None
 import plotly.express as px
 from sklearn.metrics import r2_score
 import networkx as nx
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
+import numba
 
 def is_number(s: str) -> bool:
     """
@@ -1334,6 +1598,9 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
     
     # Process each file
     for idx, (filename, file_content) in enumerate(list(uploaded_files.items()), 1):
+        # Clear memory from previous iteration
+        clear_memory()
+        
         # Calculate F_min based on file length
         file_length = file_lengths[filename][split]
         if lmin == lmax:
@@ -1349,6 +1616,12 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         # Prepare data
         global L, data, length_updated, model, V, df, new_ngram
         
+        # Очищаємо попередні дані
+        data = None
+        model = {}
+        df = None
+        new_ngram = None
+        
         length_updated = False
         
         if definition == "dynamic":
@@ -1357,35 +1630,34 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             temp = []
             if split == "letter":
                 file_text = re.sub(r'	', '', file_content)
-                data = remove_punctuation(file_text)
-                for word in data:
+                processed_data = remove_punctuation(file_text)
+                for word in processed_data:
                     for i in word:
                         if is_valid_letter(i):
                             continue
                         temp.append(i)
                 data = temp
+                # Звільняємо пам'ять
+                del processed_data
+                del temp
+                gc.collect()
             elif split == "symbol":
-                data = file_content
+                # Оптимізуємо обробку, уникаючи зайвих змінних
                 data = re.sub(r'	', '', file_content)
                 data = re.sub(r'\n+', '\n', data)
                 data = re.sub(r'\n\s\s', '\n', data)
                 data = re.sub(r'﻿', '', data)
                 temp = []
                 for i in data:
-                    if i == " ":
+                    if i == " " or i == "\n" or i == "\ufeff":
                         temp.append("space")
-                    elif i == "\n":
-                        temp.append("space")
-                        continue
-                    elif i == "\ufeff":
-                        temp.append("space")
-                        continue
                     elif i == '﻿' or is_valid_letter(i):
                         continue
                     else:
-                        i = i.lower()
-                        temp.append(i)
+                        temp.append(i.lower())
                 data = temp
+                del temp
+                gc.collect()
             elif split == "word":
                 file_text = re.sub(r'\n+', '\n', file_content)
                 file_text = re.sub(r'\n\s\s', '\n', file_text)
@@ -1394,6 +1666,8 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
                 processor = NgrammProcessor()
                 processor.preprocess(file_text)
                 data = processor.get_words()
+                del processor
+                gc.collect()
 
         L = len(data)
         
@@ -1429,7 +1703,13 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         
         # Process positions and calculate parameters
         for index, ngram in enumerate(current_df['ngram']):
-            model[ngram].dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_option)
+            # Skip if ngram doesn't exist in model
+            if ngram not in model:
+                continue
+                
+            # Ensure min_dist_option is an integer
+            min_dist_int = int(min_dist_option) if isinstance(min_dist_option, (str, float)) else min_dist_option
+            model[ngram].dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_int)
             
         windows = list(range(w_val, wm_val, we_val))
         
@@ -1440,6 +1720,14 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         
         # Process windows and calculate parameters
         for i, ngram in enumerate(current_df["ngram"]):
+            # Skip if ngram doesn't exist in model
+            if ngram not in model:
+                temp_error.append(0)
+                temp_gamma.append(0)
+                temp_a.append(0)
+                temp_R.append(0)
+                continue
+            
             for wind in windows:
                 if overlap_mode == "overlapping":
                     model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=wh_val, overlap_mode=overlap_mode)
@@ -1501,19 +1789,21 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             gammaw_avg = (df_filtered['gamma'] * df_filtered['w']).sum()
             dgammaw = np.sqrt((((df_filtered['gamma'] - gammaw_avg) ** 2) * df_filtered['w']).sum())
         else:
+            # Default values if no data
             R_avg = dR = Rw_avg = dRw = gamma_avg = dgamma = gammaw_avg = dgammaw = 0
-        
+            
+        # Calculate execution time
         end_time = time()
-        processing_time = end_time - start_time
+        execution_time = end_time - start_time
         
-        # Store results
-        result = {
+        # Create batch result
+        batch_result = {
             "no": idx,
             "filename": filename,
             "f_min": f_min,
             "length": L,
-            "vocabulary": V - 1,  # Excluding 'new_ngram'
-            "time": round(processing_time, 4),
+            "vocabulary": V,
+            "time": round(execution_time, 3),
             "r_avg": round(R_avg, 8),
             "dr": round(dR, 8),
             "rw_avg": round(Rw_avg, 8),
@@ -1521,38 +1811,59 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             "g_avg": round(gamma_avg, 8),
             "dg": round(dgamma, 8),
             "gw_avg": round(gammaw_avg, 8),
-            "dgw": round(dgammaw, 8),
-            # Add window parameters to results
-            "w_val": w_val,
-            "wh_val": wh_val,
-            "we_val": we_val, 
-            "wm_val": wm_val
+            "dgw": round(dgammaw, 8)
         }
         
-        batch_results.append(result)
+        batch_results.append(batch_result)
+        
+        # Очищаємо пам'ять після обробки файлу
+        del current_df
+        del df_filtered
+        gc.collect()
+        
+    # Create DataFrame from batch results
+    df_batch = pd.DataFrame(batch_results)
     
-    # Calculate mean and standard deviation across all files
-    if batch_results:
-        # Extract numeric columns
-        numeric_columns = ['f_min', 'length', 'vocabulary', 'time', 
-                           'r_avg', 'dr', 'rw_avg', 'drw', 
-                           'g_avg', 'dg', 'gw_avg', 'dgw',
-                           'w_val', 'wh_val', 'we_val', 'wm_val']
+    # Calculate mean values
+    if len(df_batch) > 0:
+        means = {
+            "no": len(batch_results) + 1,
+            "filename": "MEAN",
+            "f_min": "-",
+            "length": round(df_batch["length"].mean()),
+            "vocabulary": round(df_batch["vocabulary"].mean()),
+            "time": round(df_batch["time"].mean(), 3),
+            "r_avg": round(df_batch["r_avg"].mean(), 8),
+            "dr": round(df_batch["dr"].mean(), 8),
+            "rw_avg": round(df_batch["rw_avg"].mean(), 8),
+            "drw": round(df_batch["drw"].mean(), 8),
+            "g_avg": round(df_batch["g_avg"].mean(), 8),
+            "dg": round(df_batch["dg"].mean(), 8),
+            "gw_avg": round(df_batch["gw_avg"].mean(), 8),
+            "dgw": round(df_batch["dgw"].mean(), 8)
+        }
         
-        # Calculate means
-        means = {col: round(np.mean([result[col] for result in batch_results]), 8) for col in numeric_columns}
-        means['no'] = 'Mean'
-        means['filename'] = 'Average'
+        stddevs = {
+            "no": len(batch_results) + 2,
+            "filename": "STDDEV",
+            "f_min": "-",
+            "length": round(df_batch["length"].std()),
+            "vocabulary": round(df_batch["vocabulary"].std()),
+            "time": round(df_batch["time"].std(), 3),
+            "r_avg": round(df_batch["r_avg"].std(), 8),
+            "dr": round(df_batch["dr"].std(), 8),
+            "rw_avg": round(df_batch["rw_avg"].std(), 8),
+            "drw": round(df_batch["drw"].std(), 8),
+            "g_avg": round(df_batch["g_avg"].std(), 8),
+            "dg": round(df_batch["dg"].std(), 8),
+            "gw_avg": round(df_batch["gw_avg"].std(), 8),
+            "dgw": round(df_batch["dgw"].std(), 8)
+        }
         
-        # Calculate standard deviations
-        stds = {col: round(np.std([result[col] for result in batch_results]), 8) for col in numeric_columns}
-        stds['no'] = 'StdDev'
-        stds['filename'] = 'Std. Dev.'
-        
-        # Add summary rows
         batch_results.append(means)
-        batch_results.append(stds)
+        batch_results.append(stddevs)
     
+    # Return batch results as JSON and set display style
     return batch_results, {"display": "block"}
 
 # Update the batch results table to show window parameters too
@@ -1642,152 +1953,252 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
                State("condition", "value")
                ])
 def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_dist_option, overlap_mode, n_size, split, condition):
+    """
+    Оновлює таблицю та графік на основі вибраних параметрів.
+    
+    Використовує паралельну обробку для інтенсивних обчислень і оптимізоване управління пам'яттю
+    для зменшення навантаження.
+    """
     global model, L, V, df, new_ngram
+    
+    # Очищуємо кеш для мемоізованих функцій
+    if hasattr(prepare_data, 'clear_cache'):
+        prepare_data.clear_cache()
+    if hasattr(make_markov_chain, 'clear_cache'):
+        make_markov_chain.clear_cache()
+    
+    # Викликаємо збирач сміття для звільнення пам'яті
+    clear_memory(keep=['data', 'uploaded_files', 'file_lengths'])
+    
     if n is None or dataframe is None:
         return (dash.no_update, dash.no_update, {"display": "none"}, {"display": "none"},
                 dash.no_update, dash.no_update, dash.no_update,
                 dash.no_update)
-    # Завжди використовуємо data_table, оскільки вкладку MarkovChain було видалено
+                
+    # Вже нема вкладки MarkovChain, тому використовуємо тільки data_table
     if definition == "dynamic":
         start = time()
-        # Add safety checks for None values
-        w_s_val = w_s if w_s is not None else 5
-        w_max_val = w_max if w_max is not None else 100
-        w_e_val = w_e if w_e is not None else 5
+        
+        # Додаємо перевірку на None для безпеки
+        w_s_val = int(w_s) if w_s is not None else 5
+        w_max_val = int(w_max) if w_max is not None else 100
+        w_e_val = int(w_e) if w_e is not None else 5
         
         windows = list(range(w_s_val, w_max_val, w_e_val))
-        # 2. create newNgram
-
+        
+        # Створення нового n-граму та його обробка
         new_ngram = newNgram(data, w_s_val, L)
-        for w in windows:
+        
+        # Визначаємо функцію для паралельної обробки вікон
+        def process_window(w):
             if overlap_mode == "overlapping":
-                new_ngram.func(w)
+                return new_ngram.func(w)
             else:
-                new_ngram.func(w, overlap_mode=overlap_mode, min_window=w_s_val, window_expansion=w_e_val)
-        # calculate coefs
+                return new_ngram.func(w, overlap_mode=overlap_mode, min_window=w_s_val, window_expansion=w_e_val)
+        
+        # Паралельна обробка вікон (якщо їх достатньо багато)
+        if len(windows) > 4:  # Паралелізуємо лише якщо є достатня кількість вікон
+            with ThreadPoolExecutor(max_workers=min(4, len(windows))) as executor:
+                list(executor.map(process_window, windows))
+        else:
+            # Послідовна обробка для малої кількості вікон
+            for w in windows:
+                process_window(w)
+        
+        # Оптимізоване створення списків для елементів та їх позицій
         temp_v = []
         temp_pos = []
+        unique_items = set()  # Використовуємо множину для швидшого пошуку
+        
         for i, ngram in enumerate(data):
-            if ngram not in temp_v:
+            if ngram not in unique_items:
+                unique_items.add(ngram)
                 temp_v.append(ngram)
                 temp_pos.append(i)
-        new_ngram.dt = calculate_distance(np.array(temp_pos, dtype=np.uint8), L, condition, ngram, min_dist_option)
+        
+        # Використовуємо numpy масиви для ефективнішої обробки
+        temp_pos_array = np.array(temp_pos, dtype=np.uint32)
+        new_ngram.dt = calculate_distance(temp_pos_array, L, condition, ngram, min_dist_option)
         new_ngram.R = round(R(new_ngram.dt), 8)
-        c, _ = curve_fit(fit, list(new_ngram.dfa.keys()), list(new_ngram.dfa.values()), method='lm', maxfev=5000)
-        new_ngram.a = round(c[0], 8)
-        new_ngram.gamma = round(c[1], 8)
-        new_ngram.temp_dfa = []
-        for w in new_ngram.dfa.keys():
-            new_ngram.temp_dfa.append(fit(w, new_ngram.a, new_ngram.gamma))
-        new_ngram.goodness = round(r2_score(list(new_ngram.dfa.values()), new_ngram.temp_dfa), 8)
-        df = pd.DataFrame()
-        df['rank'] = [1]
-        df['ngram'] = ['new_ngram']
-        df["F"] = [len(temp_pos)]
-        df['R'] = [new_ngram.R]
-        df["a"] = [new_ngram.a]
-        df["gamma"] = [new_ngram.gamma]
-        df['goodness'] = [new_ngram.goodness]
+        
+        # Обробка помилок при підгонці кривої
+        try:
+            dfa_keys = list(new_ngram.dfa.keys())
+            dfa_values = list(new_ngram.dfa.values())
+            
+            c, _ = curve_fit(fit, dfa_keys, dfa_values, method='lm', maxfev=5000)
+            new_ngram.a = round(c[0], 8)
+            new_ngram.gamma = round(c[1], 8)
+            
+            # Оптимізуємо обчислення temp_dfa
+            new_ngram.temp_dfa = [fit(w, new_ngram.a, new_ngram.gamma) for w in dfa_keys]
+            new_ngram.goodness = round(r2_score(dfa_values, new_ngram.temp_dfa), 8)
+            
+            # Звільняємо пам'ять від тимчасових змінних
+            del dfa_keys, dfa_values
+        except Exception as e:
+            print(f"Error in curve fitting: {e}")
+            new_ngram.a = 0
+            new_ngram.gamma = 0
+            new_ngram.temp_dfa = []
+            new_ngram.goodness = 0
+        
+        # Створення DataFrame для представлення результатів
+        df = pd.DataFrame({
+            'rank': [1],
+            'ngram': ['new_ngram'],
+            'F': [len(temp_pos)],
+            'R': [new_ngram.R],
+            'a': [new_ngram.a],
+            'gamma': [new_ngram.gamma],
+            'goodness': [new_ngram.goodness]
+        })
+        
         V = len(temp_v)
-
+        
+        end_time = time()
+        execution_time = end_time - start
+        
+        # Підготовка даних для відображення
+        df_table = df.to_dict("records")
+        
+        # Додаємо інформацію про розмір словника і час виконання
+        vocab_info = f"Vocabulary: {V}"
+        time_info = f"Time: {execution_time:.4f} s"
+        
+        # Звільняємо пам'ять від тимчасових змінних
+        del temp_v, temp_pos, unique_items, temp_pos_array
+        gc.collect()
+        
+        return (df_table, dash.no_update, {"display": "inline"}, {"display": "none"},
+                dash.no_update, vocab_info, time_info, False)
     else:
-        ###  MAKE MARKOV CHAIN ####
+        # Markov Chain обробка
         start = time()
+        
+        # Створення ланцюга Маркова та DataFrame
         make_markov_chain(data, order=n_size)
         df = make_dataframe(model, f_min)
-
-        for index, ngram in enumerate(df['ngram']):
-            model[ngram].dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_option)
-
-        def func(wind):
-            # Safety checks for None values
-            w_s_val = w_s if w_s is not None else 5
-            w_e_val = w_e if w_e is not None else 5
-            
-            if overlap_mode == "overlapping":
-                model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=w_s_val, overlap_mode=overlap_mode)
-            else:
-                # Для non-overlapping mode
-                model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=w_s_val, 
-                                                        overlap_mode=overlap_mode, min_window=w_s_val, window_expansion=w_e_val)
-            
-            model[ngram].fa[wind] = mse(model[ngram].counts[wind])
-
-        # Add safety checks for None values
-        w_s_val = w_s if w_s is not None else 5
-        w_max_val = w_max if w_max is not None else 100
-        w_e_val = w_e if w_e is not None else 5
+        
+        # Перевірка безпеки для None значень
+        w_s_val = int(w_s) if w_s is not None else 5
+        w_max_val = int(w_max) if w_max is not None else 100
+        w_e_val = int(w_e) if w_e is not None else 5
         
         windows = list(range(w_s_val, w_max_val, w_e_val))
-
-        temp_gamma = []
-        temp_R = []
-        temp_error = []
-        temp_ngram = []
-        temp_a = []
-
-        # NOTE розділити на дві частини windows
-        mid = len(windows) // 2
-        windows_part1 = windows[:mid]
-        windows_part2 = windows[mid:]
-
-        def process_windows(windows_part):
-            for _wind in windows_part:
-                func(_wind)
-
-        # NOTE найбільш важкий цикл
-        for i, ngram in enumerate(df["ngram"]):
-
+        
+        # Функція для обробки окремого n-грама
+        def process_ngram(ngram_data):
+            ngram, index = ngram_data
+            
+            # Розрахунок відстаней
+            dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_option)
+            model[ngram].dt = dt
+            
+            # Обробка вікон для цього n-грама
             for wind in windows:
-                func(wind)
-
-            model[ngram].temp_fa = []
-            ff = [*model[ngram].fa.values()]
-
-            # NOTE спричиняє проблеми при паралелізації (теж вимагає виконання по порядку,
-            # окрім змінних в наступній записці)
-            c, _ = curve_fit(fit, windows, ff, method='lm', maxfev=5000)
-            model[ngram].a = c[0]
-            model[ngram].gamma = c[1]
-            for w in windows:
-                model[ngram].temp_fa.append(fit(w, c[0], c[1]))
-            temp_error.append(round(r2_score(ff, model[ngram].temp_fa), 5))
-            temp_gamma.append(round(c[1], 8))
-            temp_a.append(round(c[0], 8))
-
-            if isinstance(ngram, tuple):
-                temp_ngram.append(" ".join(ngram))
-
-            r = round(R(np.array(model[ngram].dt)), 8)
-
-            temp_R.append(r)
-            model[ngram].R = r
-
+                if overlap_mode == "overlapping":
+                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=w_s_val, overlap_mode=overlap_mode)
+                else:
+                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=w_s_val, 
+                                                            overlap_mode=overlap_mode, min_window=w_s_val, window_expansion=w_e_val)
+                
+                model[ngram].fa[wind] = mse(model[ngram].counts[wind])
+            
+            # Підгонка кривої та обробка помилок
+            try:
+                ff = [*model[ngram].fa.values()]
+                c, _ = curve_fit(fit, windows, ff, method='lm', maxfev=5000)
+                
+                a_val = c[0]
+                gamma_val = c[1]
+                temp_fa = [fit(w_val, a_val, gamma_val) for w_val in windows]
+                
+                # Зберігаємо результати в моделі
+                model[ngram].a = a_val
+                model[ngram].gamma = gamma_val
+                model[ngram].temp_fa = temp_fa
+                
+                r_val = round(R(dt), 8)
+                model[ngram].R = r_val
+                
+                return {
+                    'ngram': ngram,
+                    'a': round(a_val, 8),
+                    'gamma': round(gamma_val, 8),
+                    'error': round(r2_score(ff, temp_fa), 5),
+                    'R': r_val
+                }
+            except Exception as e:
+                print(f"Error in curve fitting for {ngram}: {e}")
+                model[ngram].a = 0
+                model[ngram].gamma = 0
+                model[ngram].temp_fa = [0] * len(windows)
+                r_val = round(R(dt), 8)
+                model[ngram].R = r_val
+                
+                return {
+                    'ngram': ngram,
+                    'a': 0,
+                    'gamma': 0,
+                    'error': 0,
+                    'R': r_val
+                }
+        
+        # Підготовка даних для паралельної обробки
+        ngram_items = [(ngram, i) for i, ngram in enumerate(df["ngram"])]
+        
+        # Визначаємо кількість робітників на основі кількості n-грамів
+        max_workers = min(4, len(ngram_items))
+        
+        # Паралельна обробка для великої кількості n-грамів, інакше послідовна
+        results = []
+        if len(ngram_items) >= 4:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                results = list(executor.map(process_ngram, ngram_items))
+        else:
+            results = [process_ngram(item) for item in ngram_items]
+        
+        # Витягуємо результати
+        temp_a = [result['a'] for result in results]
+        temp_gamma = [result['gamma'] for result in results]
+        temp_error = [result['error'] for result in results]
+        temp_R = [result['R'] for result in results]
+        
+        # Обробка n-грамів для відображення
         if n_size > 1:
-            # HERE REMOVE
-            temp_ngram.append("new_ngram")
+            temp_ngram = []
+            for ng in df['ngram']:
+                if isinstance(ng, tuple):
+                    temp_ngram.append(" ".join(ng))
+                else:
+                    temp_ngram.append(ng)
             df["ngram"] = temp_ngram
-
-        #     NOTE через ці змінні в циклі які оновлюються по порядку і потім записуються напряму ж в колонку,
-        #     неможливо просто так розділити
+        
+        # Оновлення DataFrame результатами
         df['R'] = temp_R
         df['gamma'] = temp_gamma
         df['a'] = temp_a
         df['goodness'] = temp_error
         df = df.sort_values(by="F", ascending=False)
         df['rank'] = range(1, len(temp_R) + 1)
-        df = df.set_index(pd.Index(np.arange(len(df))))
-
-    voc = str(V)
-    voc = int(voc) - 1
-    # HERE V-1
-
-    return [df.to_dict(orient='records'), dash.no_update, {"display": "inline"}, {"display": "none"},
-            dash.no_update,
-            # NOTE повернення додаткових 8-ми значень на фронт-енд
-            ["Vocabulary: " + str(voc)], ["Time:" + str(round(time() - start, 4))],
-             dash.no_update
-            ]
+        
+        end_time = time()
+        execution_time = end_time - start
+        
+        # Підготовка даних для відображення
+        df_table = df.to_dict("records")
+        
+        # Додаємо інформацію про розмір словника і час виконання
+        vocab_info = f"Vocabulary: {V}"
+        time_info = f"Time: {execution_time:.4f} s"
+        
+        # Звільняємо пам'ять від тимчасових змінних
+        del temp_gamma, temp_R, temp_error, temp_a, results, ngram_items
+        gc.collect()
+        
+        return (df_table, dash.no_update, {"display": "inline"}, {"display": "none"},
+                dash.no_update, vocab_info, time_info, False)
 
 
 clikced_ngram = None

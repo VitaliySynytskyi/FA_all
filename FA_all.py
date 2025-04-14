@@ -44,49 +44,41 @@ def clear_memory(keep: List[str] = []):
     Args:
         keep: Список назв змінних, які потрібно зберегти
     """
-    global model, df, new_ngram, data
+    global model, df, new_ngram, data, uploaded_files, file_lengths, batch_results
+    
+    # Зберігаємо лише необхідні дані для таблиці
+    variables_to_keep = keep + ['uploaded_files', 'file_lengths', 'batch_results']
     
     # Очищення великих глобальних структур даних
-    if 'model' not in keep and 'model' in globals():
+    if 'model' not in variables_to_keep and 'model' in globals():
         if isinstance(model, dict):
-            # Зберігаємо тільки необхідні записи, якщо такі є
-            keys_to_keep = []
-            for var in keep:
-                if var in model:
-                    keys_to_keep.append(var)
-            
-            # Очищуємо непотрібні ключі
-            keys_to_remove = [k for k in list(model.keys()) if k not in keys_to_keep]
-            for key in keys_to_remove:
-                if key in model:
-                    del model[key]
-            
-            # Повністю очищуємо модель, якщо вона не в списку збереження
-            if not keys_to_keep:
-                model.clear()
+            model.clear()
+        model = {}
     
     # Очищення DataFrame
-    if 'df' not in keep and 'df' in globals() and df is not None:
+    if 'df' not in variables_to_keep and 'df' in globals() and df is not None:
         df = None
     
     # Очищення даних тексту
-    if 'data' not in keep and 'data' in globals() and data is not None:
+    if 'data' not in variables_to_keep and 'data' in globals() and data is not None:
         data = None
     
     # Очищення об'єкта newNgram
-    if 'new_ngram' not in keep and 'new_ngram' in globals() and new_ngram is not None:
+    if 'new_ngram' not in variables_to_keep and 'new_ngram' in globals() and new_ngram is not None:
         new_ngram = None
     
     # Очищення кешу мемоізованих функцій
-    if hasattr(prepare_data, 'clear_cache') and 'prepare_data_cache' not in keep:
+    if hasattr(prepare_data, 'clear_cache') and 'prepare_data_cache' not in variables_to_keep:
         prepare_data.clear_cache()
     
-    if hasattr(make_markov_chain, 'clear_cache') and 'make_markov_chain_cache' not in keep:
+    if hasattr(make_markov_chain, 'clear_cache') and 'make_markov_chain_cache' not in variables_to_keep:
         make_markov_chain.clear_cache()
-        
-    # Запускаємо збирач сміття декілька разів для кращого очищення пам'яті
-    gc.collect()
-    gc.collect()
+    
+    # Додаємо агресивне очищення пам'яті за допомогою Python gc
+    import gc
+    gc.collect(generation=2) # Запуск повного збирання сміття
+    gc.collect(generation=1)
+    gc.collect(generation=0)
 
 # Кешування для покращення продуктивності
 def memoize(func):
@@ -1168,10 +1160,10 @@ layout1 = html.Div([
                                                 {"name": "dR", "id": "dr"},
                                                 {"name": "Rw_avg", "id": "rw_avg"},
                                                 {"name": "dRw", "id": "drw"},
-                                                {"name": "gamma_avg", "id": "g_avg"},
-                                                {"name": "dgamma", "id": "dg"},
-                                                {"name": "gammaw_avg", "id": "gw_avg"},
-                                                {"name": "dgammaw", "id": "dgw"}
+                                                {"name": "gamma_avg", "id": "gamma_avg"},
+                                                {"name": "dgamma", "id": "dgamma"},
+                                                {"name": "gammaw_avg", "id": "gammaw_avg"},
+                                                {"name": "dgammaw", "id": "dgammaw"}
                                             ],
                                             style_data={'whiteSpace': 'normal', 'height': 'auto'},
                                             style_cell={'textAlign': 'center'},
@@ -1291,7 +1283,16 @@ layout1 = html.Div([
         duration=6000,
         children="Length has not been calculated yet!",
         style={"position": "fixed", "top": "40%", "right": "40%", "width": 500, "zIndex": 9999}
-    )
+    ),
+    # Add a manual memory cleanup button to the interface
+    html.Button(
+        "Очистити пам'ять",
+        id="memory_cleanup",
+        className="btn btn-warning",
+        style={"margin": "10px"}
+    ),
+    # Add a div to show memory cleanup status
+    html.Div(id="memory_cleanup_status", style={"margin": "10px", "color": "green"})
 ])
 from dash.dependencies import Input, Output, State
 
@@ -1304,6 +1305,7 @@ import networkx as nx
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import numba
+import os
 
 def is_number(s: str) -> bool:
     """
@@ -1613,10 +1615,11 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
     # Initialize batch results list
     batch_results = []
     
-    # Process each file sequentially
-    for idx, (filename, file_content) in enumerate(list(uploaded_files.items()), 1):
-        # Clear memory before processing a new file
-        clear_memory()
+    # Process each file sequentially and clear memory after each
+    file_list = list(uploaded_files.items())
+    for idx, (filename, file_content) in enumerate(file_list, 1):
+        # Force garbage collection before starting new file
+        gc.collect()
         
         # Calculate F_min based on file length
         file_length = file_lengths[filename][split]
@@ -1630,42 +1633,37 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         # Process the file
         start_time = time()
         
-        # Prepare data
-        global L, data, length_updated, model, V, df, new_ngram
-        
-        # Очищаємо попередні дані
+        # Initialize all variables locally to avoid memory leaks
         data = None
-        model = {}
-        df = None
-        new_ngram = None
+        local_model = {}
         
-        length_updated = False
-        
+        # Process data based on definition mode
         if definition == "dynamic":
             data = prepare_data(file_content, n_size, split)
         else:
-            temp = []
             if split == "letter":
                 file_text = re.sub(r'	', '', file_content)
                 processed_data = remove_punctuation(file_text)
+                temp = []
                 for word in processed_data:
                     for i in word:
                         if is_valid_letter(i):
                             continue
                         temp.append(i)
                 data = temp
-                # Звільняємо пам'ять
+                # Free memory immediately
                 del processed_data
                 del temp
+                del file_text
                 gc.collect()
             elif split == "symbol":
-                # Оптимізуємо обробку, уникаючи зайвих змінних
-                data = re.sub(r'	', '', file_content)
-                data = re.sub(r'\n+', '\n', data)
-                data = re.sub(r'\n\s\s', '\n', data)
-                data = re.sub(r'﻿', '', data)
+                # Optimize processing
+                clean_text = re.sub(r'	', '', file_content)
+                clean_text = re.sub(r'\n+', '\n', clean_text)
+                clean_text = re.sub(r'\n\s\s', '\n', clean_text)
+                clean_text = re.sub(r'﻿', '', clean_text)
                 temp = []
-                for i in data:
+                for i in clean_text:
                     if i == " " or i == "\n" or i == "\ufeff":
                         temp.append("space")
                     elif i == '﻿' or is_valid_letter(i):
@@ -1674,6 +1672,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
                         temp.append(i.lower())
                 data = temp
                 del temp
+                del clean_text
                 gc.collect()
             elif split == "word":
                 file_text = re.sub(r'\n+', '\n', file_content)
@@ -1684,6 +1683,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
                 processor.preprocess(file_text)
                 data = processor.get_words()
                 del processor
+                del file_text
                 gc.collect()
 
         L = len(data)
@@ -1712,89 +1712,107 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         wh_val = max(1, wh_val)
         we_val = max(1, we_val)
         
-        length_updated = True
+        # Make Markov chain (use local variables)
+        for i in range(L - n_size + 1):
+            if i + n_size <= len(data):
+                if n_size == 1:
+                    ngram = data[i]
+                else:
+                    ngram = tuple(data[i:i + n_size])
+                
+                if ngram not in local_model:
+                    local_model[ngram] = Ngram()
+                    local_model[ngram].pos = []
+                
+                local_model[ngram].pos.append(i)
         
-        # Make Markov chain
-        make_markov_chain(data, order=n_size)
-        current_df = make_dataframe(model, f_min)
+        # Build a vocabulary count for statistics
+        V = len(local_model)
+        
+        # Make DataFrame locally instead of using global function to save memory
+        filtered_data = list(filter(lambda x: len(local_model[x].pos) >= f_min, local_model))
+        
+        data_df = {"ngram": [], "F": np.empty(len(filtered_data), dtype=np.int32)}
+        for i, ngram in enumerate(filtered_data):
+            data_df["ngram"].append(ngram)
+            data_df["F"][i] = len(local_model[ngram].pos)
+        
+        current_df = pd.DataFrame(data=data_df)
         
         # Process positions and calculate parameters
-        for index, ngram in enumerate(current_df['ngram']):
-            # Skip if ngram doesn't exist in model
-            if ngram not in model:
-                continue
-                
-            # Ensure min_dist_option is an integer
-            min_dist_int = int(min_dist_option) if isinstance(min_dist_option, (str, float)) else min_dist_option
-            model[ngram].dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_int)
-            
-        windows = list(range(w_val, wm_val, we_val))
-        
         temp_gamma = []
         temp_R = []
         temp_error = []
         temp_a = []
         
-        # Process windows and calculate parameters
-        for i, ngram in enumerate(current_df["ngram"]):
-            # Skip if ngram doesn't exist in model
-            if ngram not in model:
-                temp_error.append(0)
-                temp_gamma.append(0)
-                temp_a.append(0)
-                temp_R.append(0)
-                continue
+        windows = list(range(w_val, wm_val, we_val))
+        
+        # Process each ngram
+        for i, row in current_df.iterrows():
+            ngram = row['ngram']
+            
+            # Generate boolean array for this ngram
+            local_model[ngram].bool = np.zeros(L, dtype=np.int8)
+            for pos in local_model[ngram].pos:
+                local_model[ngram].bool[pos] = 1
+            
+            # Calculate distances
+            min_dist_int = int(min_dist_option) if isinstance(min_dist_option, (str, float)) else min_dist_option
+            local_model[ngram].dt = calculate_distance(np.array(local_model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_int)
+            
+            # Process windows
+            local_model[ngram].fa = {}
+            local_model[ngram].counts = {}
             
             for wind in windows:
                 if overlap_mode == "overlapping":
-                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=wh_val, overlap_mode=overlap_mode)
+                    local_model[ngram].counts[wind] = make_windows(local_model[ngram].bool, wi=wind, l=L, wsh=wh_val, overlap_mode=overlap_mode)
                 else:
-                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=wh_val, 
-                                                           overlap_mode=overlap_mode, min_window=w_val, window_expansion=we_val)
-                model[ngram].fa[wind] = mse(model[ngram].counts[wind])
-
-            model[ngram].temp_fa = []
-            ff = [*model[ngram].fa.values()]
+                    local_model[ngram].counts[wind] = make_windows(local_model[ngram].bool, wi=wind, l=L, wsh=wh_val, 
+                                                                overlap_mode=overlap_mode, min_window=w_val, window_expansion=we_val)
+                local_model[ngram].fa[wind] = mse(local_model[ngram].counts[wind])
+            
+            ff = [local_model[ngram].fa[wind] for wind in windows]
             
             try:
                 c, _ = curve_fit(fit, windows, ff, method='lm', maxfev=5000)
-                model[ngram].a = c[0]
-                model[ngram].gamma = c[1]
-                for w_val in windows:
-                    model[ngram].temp_fa.append(fit(w_val, c[0], c[1]))
-                temp_error.append(round(r2_score(ff, model[ngram].temp_fa), 5))
-                temp_gamma.append(round(c[1], 8))
-                temp_a.append(round(c[0], 8))
+                a_val = c[0]
+                gamma_val = c[1]
+                temp_fa = [fit(w_val, c[0], c[1]) for w_val in windows]
+                temp_error.append(round(r2_score(ff, temp_fa), 5))
+                temp_gamma.append(round(gamma_val, 8))
+                temp_a.append(round(a_val, 8))
             except:
                 # Handle curve fitting errors
                 temp_error.append(0)
                 temp_gamma.append(0)
                 temp_a.append(0)
-                
-            r = round(R(np.array(model[ngram].dt)), 8)
-            temp_R.append(r)
-            model[ngram].R = r
             
+            r = round(R(np.array(local_model[ngram].dt)), 8)
+            temp_R.append(r)
+        
+        # Handle n-grams formatting if needed
         if n_size > 1:
             temp_ngram = []
             for ng in current_df['ngram']:
                 if isinstance(ng, tuple):
                     temp_ngram.append(" ".join(ng))
-            temp_ngram.append("new_ngram")
+                else:
+                    temp_ngram.append(ng)
             current_df["ngram"] = temp_ngram
-            
+        
+        # Add calculated parameters to DataFrame
         current_df['R'] = temp_R
         current_df['gamma'] = temp_gamma
         current_df['a'] = temp_a
         current_df['goodness'] = temp_error
         current_df = current_df.sort_values(by="F", ascending=False)
-        current_df['rank'] = range(1, len(temp_R) + 1)
-        current_df = current_df.set_index(pd.Index(np.arange(len(current_df))))
+        current_df['rank'] = range(1, len(current_df) + 1)
         
         # Calculate the 8 parameters
-        df_filtered = current_df[current_df.ngram != 'new_ngram'].copy()
+        df_filtered = current_df.copy()
         if len(df_filtered) > 0:
-            df_filtered['w'] = (df_filtered['F']) / (df_filtered['F'].sum())
+            df_filtered['w'] = df_filtered['F'] / df_filtered['F'].sum()
             
             R_avg = df_filtered['R'].mean()
             dR = df_filtered['R'].std()
@@ -1808,12 +1826,12 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         else:
             # Default values if no data
             R_avg = dR = Rw_avg = dRw = gamma_avg = dgamma = gammaw_avg = dgammaw = 0
-            
+        
         # Calculate execution time
         end_time = time()
         execution_time = end_time - start_time
         
-        # Create batch result
+        # Create batch result (store only what's needed for the table)
         batch_result = {
             "no": idx,
             "filename": filename,
@@ -1825,84 +1843,99 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             "dr": round(dR, 8),
             "rw_avg": round(Rw_avg, 8),
             "drw": round(dRw, 8),
-            "g_avg": round(gamma_avg, 8),
-            "dg": round(dgamma, 8),
-            "gw_avg": round(gammaw_avg, 8),
-            "dgw": round(dgammaw, 8),
-            "w_val": w_val,
-            "wh_val": wh_val,
-            "we_val": we_val,
-            "wm_val": wm_val
+            "gamma_avg": round(gamma_avg, 8),
+            "dgamma": round(dgamma, 8),
+            "gammaw_avg": round(gammaw_avg, 8),
+            "dgammaw": round(dgammaw, 8)
         }
         
-        # Add current result to batch_results
         batch_results.append(batch_result)
         
-        # Clear memory after processing the file
-        # Keep only essential data for the next iteration
-        clear_memory(keep=['batch_results', 'uploaded_files', 'file_lengths'])
-        
-        # Free memory for current dataframes
+        # Explicitly clean up all local variables
+        del data
+        del local_model
         del current_df
         del df_filtered
+        del temp_gamma
+        del temp_R
+        del temp_error
+        del temp_a
+        
+        # Force garbage collection multiple times
+        gc.collect()
         gc.collect()
     
-    # Calculate and add mean values only after all files have been processed
-    if len(batch_results) > 0:
-        # Create DataFrame from batch results for calculating statistics
-        df_batch = pd.DataFrame(batch_results)
-        
-        means = {
-            "no": len(batch_results) + 1,
-            "filename": "MEAN",
-            "f_min": "-",
-            "length": round(df_batch["length"].mean()),
-            "vocabulary": round(df_batch["vocabulary"].mean()),
-            "time": round(df_batch["time"].mean(), 3),
-            "r_avg": round(df_batch["r_avg"].mean(), 8),
-            "dr": round(df_batch["dr"].mean(), 8),
-            "rw_avg": round(df_batch["rw_avg"].mean(), 8),
-            "drw": round(df_batch["drw"].mean(), 8),
-            "g_avg": round(df_batch["g_avg"].mean(), 8),
-            "dg": round(df_batch["dg"].mean(), 8),
-            "gw_avg": round(df_batch["gw_avg"].mean(), 8),
-            "dgw": round(df_batch["dgw"].mean(), 8),
-            "w_val": round(df_batch["w_val"].mean()),
-            "wh_val": round(df_batch["wh_val"].mean()),
-            "we_val": round(df_batch["we_val"].mean()),
-            "wm_val": round(df_batch["wm_val"].mean())
-        }
-        
-        stddevs = {
-            "no": len(batch_results) + 2,
-            "filename": "STDDEV",
-            "f_min": "-",
-            "length": round(df_batch["length"].std()),
-            "vocabulary": round(df_batch["vocabulary"].std()),
-            "time": round(df_batch["time"].std(), 3),
-            "r_avg": round(df_batch["r_avg"].std(), 8),
-            "dr": round(df_batch["dr"].std(), 8),
-            "rw_avg": round(df_batch["rw_avg"].std(), 8),
-            "drw": round(df_batch["drw"].std(), 8),
-            "g_avg": round(df_batch["g_avg"].std(), 8),
-            "dg": round(df_batch["dg"].std(), 8),
-            "gw_avg": round(df_batch["gw_avg"].std(), 8),
-            "dgw": round(df_batch["dgw"].std(), 8),
-            "w_val": round(df_batch["w_val"].std()),
-            "wh_val": round(df_batch["wh_val"].std()),
-            "we_val": round(df_batch["we_val"].std()),
-            "wm_val": round(df_batch["wm_val"].std())
-        }
-        
-        batch_results.append(means)
-        batch_results.append(stddevs)
-        
-        # Free the temporary dataframe
-        del df_batch
-        gc.collect()
+    # Calculate statistics if we have results
+    if batch_results:
+        # Add the mean and standard deviation rows after all files processed
+        add_batch_statistics(batch_results)
     
-    # Return batch results as JSON and set display style
     return batch_results, {"display": "block"}
+    
+def add_batch_statistics(results):
+    """
+    Adds mean and standard deviation rows to batch results
+    
+    Args:
+        results: List of batch results to add statistics to
+    """
+    if not results:
+        return
+    
+    # Extract only numerical data for statistics
+    data_for_stats = []
+    numeric_fields = ["length", "vocabulary", "time", "r_avg", "dr", "rw_avg", "drw", 
+                    "gamma_avg", "dgamma", "gammaw_avg", "dgammaw"]
+    
+    for item in results:
+        # Skip statistics rows (if this function is called multiple times)
+        if item["filename"] in ["MEAN", "STDDEV"]:
+            continue
+        
+        data_point = {}
+        for field in numeric_fields:
+            if field in item:
+                data_point[field] = item[field]
+        
+        data_for_stats.append(data_point)
+    
+    # Calculate means
+    if not data_for_stats:
+        return
+        
+    df_stats = pd.DataFrame(data_for_stats)
+    
+    # Calculate means
+    means = {
+        "no": len(results) + 1,
+        "filename": "MEAN",
+        "f_min": "-",
+    }
+    
+    # Calculate standard deviations
+    stddevs = {
+        "no": len(results) + 2,
+        "filename": "STDDEV",
+        "f_min": "-",
+    }
+    
+    # Fill in statistics for all numeric fields
+    for field in numeric_fields:
+        if field in df_stats.columns:
+            means[field] = round(df_stats[field].mean(), 
+                               8 if field in ["r_avg", "dr", "rw_avg", "drw", "gamma_avg", "dgamma", "gammaw_avg", "dgammaw"] else 
+                               3 if field == "time" else 0)
+            
+            stddevs[field] = round(df_stats[field].std(), 
+                                 8 if field in ["r_avg", "dr", "rw_avg", "drw", "gamma_avg", "dgamma", "gammaw_avg", "dgammaw"] else 
+                                 3 if field == "time" else 0)
+    
+    # Remove old statistics rows if present
+    results[:] = [r for r in results if r["filename"] not in ["MEAN", "STDDEV"]]
+    
+    # Add statistics to results
+    results.append(means)
+    results.append(stddevs)
 
 # Update the batch results table to show window parameters too
 @app.callback(
@@ -1924,14 +1957,10 @@ def update_batch_table_columns(n_clicks):
         {"name": "dR", "id": "dr"},
         {"name": "Rw_avg", "id": "rw_avg"},
         {"name": "dRw", "id": "drw"},
-        {"name": "gamma_avg", "id": "g_avg"},
-        {"name": "dgamma", "id": "dg"},
-        {"name": "gammaw_avg", "id": "gw_avg"},
-        {"name": "dgammaw", "id": "dgw"},
-        {"name": "W_min", "id": "w_val"},
-        {"name": "W_step", "id": "wh_val"},
-        {"name": "W_exp", "id": "we_val"},
-        {"name": "W_max", "id": "wm_val"}
+        {"name": "gamma_avg", "id": "gamma_avg"},
+        {"name": "dgamma", "id": "dgamma"},
+        {"name": "gammaw_avg", "id": "gammaw_avg"},
+        {"name": "dgammaw", "id": "dgammaw"}
     ]
     
     return columns
@@ -1955,6 +1984,10 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
     try:
         # Create DataFrame from batch results
         df_batch = pd.DataFrame(batch_results)
+        
+        # Ensure column names match the display columns for consistency
+        # This ensures the saved file has the same data structure as what's shown in the UI
+        column_mapping = {}
         
         # Create filename with parameters
         output_filename = "saved_data/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={},window_mode={}.xlsx".format(
@@ -2639,3 +2672,27 @@ if __name__ == "__main__":
 )
 def toggle_batch_window_controls(mode):
     return mode in ["ui", "auto"]
+
+# Add callback for memory cleanup button
+@app.callback(
+    Output("memory_cleanup_status", "children"),
+    [Input("memory_cleanup", "n_clicks")]
+)
+def cleanup_memory(n_clicks):
+    if n_clicks is None:
+        return ""
+    
+    # Force aggressive memory cleanup
+    clear_memory()
+    
+    # Force Python's garbage collector
+    import gc
+    gc.collect(generation=2)
+    gc.collect(generation=1)
+    gc.collect(generation=0)
+    
+    return "Пам'ять очищено!"
+
+# Add a div to show memory cleanup status
+memory_status_div = html.Div(id="memory_cleanup_status", style={"margin": "10px", "color": "green"})
+app.layout.children[2].children[2].children.append(memory_status_div)

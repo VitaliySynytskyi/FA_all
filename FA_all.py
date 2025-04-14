@@ -34,6 +34,7 @@ import networkx as nx
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import numba
+import os
 
 # Функція для очищення пам'яті
 def clear_memory(keep: List[str] = []):
@@ -43,7 +44,7 @@ def clear_memory(keep: List[str] = []):
     Args:
         keep: Список назв змінних, які потрібно зберегти
     """
-    global model, df, new_ngram
+    global model, df, new_ngram, data
     
     # Очищення великих глобальних структур даних
     if 'model' not in keep and 'model' in globals():
@@ -59,18 +60,34 @@ def clear_memory(keep: List[str] = []):
             for key in keys_to_remove:
                 if key in model:
                     del model[key]
+            
+            # Повністю очищуємо модель, якщо вона не в списку збереження
+            if not keys_to_keep:
+                model.clear()
     
     # Очищення DataFrame
     if 'df' not in keep and 'df' in globals() and df is not None:
         df = None
     
+    # Очищення даних тексту
+    if 'data' not in keep and 'data' in globals() and data is not None:
+        data = None
+    
     # Очищення об'єкта newNgram
     if 'new_ngram' not in keep and 'new_ngram' in globals() and new_ngram is not None:
         new_ngram = None
     
-    # Викликаємо збирач сміття для звільнення пам'яті
-    gc.collect()
+    # Очищення кешу мемоізованих функцій
+    if hasattr(prepare_data, 'clear_cache') and 'prepare_data_cache' not in keep:
+        prepare_data.clear_cache()
     
+    if hasattr(make_markov_chain, 'clear_cache') and 'make_markov_chain_cache' not in keep:
+        make_markov_chain.clear_cache()
+        
+    # Запускаємо збирач сміття декілька разів для кращого очищення пам'яті
+    gc.collect()
+    gc.collect()
+
 # Кешування для покращення продуктивності
 def memoize(func):
     """
@@ -1596,9 +1613,9 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
     # Initialize batch results list
     batch_results = []
     
-    # Process each file
+    # Process each file sequentially
     for idx, (filename, file_content) in enumerate(list(uploaded_files.items()), 1):
-        # Clear memory from previous iteration
+        # Clear memory before processing a new file
         clear_memory()
         
         # Calculate F_min based on file length
@@ -1811,21 +1828,30 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             "g_avg": round(gamma_avg, 8),
             "dg": round(dgamma, 8),
             "gw_avg": round(gammaw_avg, 8),
-            "dgw": round(dgammaw, 8)
+            "dgw": round(dgammaw, 8),
+            "w_val": w_val,
+            "wh_val": wh_val,
+            "we_val": we_val,
+            "wm_val": wm_val
         }
         
+        # Add current result to batch_results
         batch_results.append(batch_result)
         
-        # Очищаємо пам'ять після обробки файлу
+        # Clear memory after processing the file
+        # Keep only essential data for the next iteration
+        clear_memory(keep=['batch_results', 'uploaded_files', 'file_lengths'])
+        
+        # Free memory for current dataframes
         del current_df
         del df_filtered
         gc.collect()
-        
-    # Create DataFrame from batch results
-    df_batch = pd.DataFrame(batch_results)
     
-    # Calculate mean values
-    if len(df_batch) > 0:
+    # Calculate and add mean values only after all files have been processed
+    if len(batch_results) > 0:
+        # Create DataFrame from batch results for calculating statistics
+        df_batch = pd.DataFrame(batch_results)
+        
         means = {
             "no": len(batch_results) + 1,
             "filename": "MEAN",
@@ -1840,7 +1866,11 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             "g_avg": round(df_batch["g_avg"].mean(), 8),
             "dg": round(df_batch["dg"].mean(), 8),
             "gw_avg": round(df_batch["gw_avg"].mean(), 8),
-            "dgw": round(df_batch["dgw"].mean(), 8)
+            "dgw": round(df_batch["dgw"].mean(), 8),
+            "w_val": round(df_batch["w_val"].mean()),
+            "wh_val": round(df_batch["wh_val"].mean()),
+            "we_val": round(df_batch["we_val"].mean()),
+            "wm_val": round(df_batch["wm_val"].mean())
         }
         
         stddevs = {
@@ -1857,11 +1887,19 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             "g_avg": round(df_batch["g_avg"].std(), 8),
             "dg": round(df_batch["dg"].std(), 8),
             "gw_avg": round(df_batch["gw_avg"].std(), 8),
-            "dgw": round(df_batch["dgw"].std(), 8)
+            "dgw": round(df_batch["dgw"].std(), 8),
+            "w_val": round(df_batch["w_val"].std()),
+            "wh_val": round(df_batch["wh_val"].std()),
+            "we_val": round(df_batch["we_val"].std()),
+            "wm_val": round(df_batch["wm_val"].std())
         }
         
         batch_results.append(means)
         batch_results.append(stddevs)
+        
+        # Free the temporary dataframe
+        del df_batch
+        gc.collect()
     
     # Return batch results as JSON and set display style
     return batch_results, {"display": "block"}
@@ -1890,10 +1928,10 @@ def update_batch_table_columns(n_clicks):
         {"name": "dgamma", "id": "dg"},
         {"name": "gammaw_avg", "id": "gw_avg"},
         {"name": "dgammaw", "id": "dgw"},
-        {"name": "W", "id": "w_val"},
-        {"name": "WH", "id": "wh_val"},
-        {"name": "WE", "id": "we_val"},
-        {"name": "WM", "id": "wm_val"}
+        {"name": "W_min", "id": "w_val"},
+        {"name": "W_step", "id": "wh_val"},
+        {"name": "W_exp", "id": "we_val"},
+        {"name": "W_max", "id": "wm_val"}
     ]
     
     return columns
@@ -1907,9 +1945,10 @@ def update_batch_table_columns(n_clicks):
      State("condition", "value"),
      State("def", "value"),
      State("min_dist_option", "value"),
-     State("overlap_mode", "value")]
+     State("overlap_mode", "value"),
+     State("batch_window_mode", "value")]
 )
-def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_option, overlap_mode):
+def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_option, overlap_mode, batch_window_mode):
     if n_clicks is None or not batch_results:
         return html.Div(["No batch results to save"])
     
@@ -1918,8 +1957,11 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
         df_batch = pd.DataFrame(batch_results)
         
         # Create filename with parameters
-        output_filename = "saved_data/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={}.xlsx".format(
-            n_size, split, condition, definition, min_dist_option, overlap_mode)
+        output_filename = "saved_data/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={},window_mode={}.xlsx".format(
+            n_size, split, condition, definition, min_dist_option, overlap_mode, batch_window_mode)
+        
+        # Ensure directory exists
+        os.makedirs("saved_data", exist_ok=True)
         
         # Save to Excel - modify to use older pandas style
         writer = pd.ExcelWriter(output_filename)

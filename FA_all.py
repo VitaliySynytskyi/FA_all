@@ -128,21 +128,15 @@ def remove_punctuation_for_words(data):
 
 def remove_punctuation(data):
     """
-    Видаляє знаки пунктуації з тексту та перетворює його на нижній регістр.
-    
-    Args:
-        data: Вхідний текст
-        
-    Returns:
-        str: Текст без знаків пунктуації
+    Видаляє знаки пунктуації з тексту.
     """
-    # Використовуємо ефективніший підхід з множиною знаків пунктуації
-    punctuation_set = set(punctuation)
-    
-    # Використовуємо списковий вираз для кращої продуктивності
-    result = ''.join(char.lower() for char in data if char not in punctuation_set)
-    
-    return result
+    temp = []
+    for i in range(len(data)):
+        if data[i] in punctuation:
+            continue
+        else:
+            temp.append(data[i].lower())
+    return "".join(temp)
 
 toast_visible = False
 error_visible = False
@@ -576,7 +570,7 @@ def prepare_data(data: str, n: int, split: str) -> List:
     # Для n=1 (одиничні елементи)
     if n == 1:
         if split == "word":
-            # Обробка тексту для слів - використовуємо NgrammProcessor
+            # Обробка тексту для слів
             data = re.sub(r'--', ' -', data)
             processor = NgrammProcessor()
             processor.preprocess(data)
@@ -585,19 +579,19 @@ def prepare_data(data: str, n: int, split: str) -> List:
             return result
             
         elif split == 'letter':
-            # Обробка для літер - оптимізуємо для зменшення використання пам'яті
-            result = []
-            processed = remove_punctuation(data)
-            for char in processed:
-                if not is_valid_letter(char):
-                    result.append(char)
-            L = len(result)
-            # Звільняємо пам'ять
-            del processed
-            return result
+            # Обробка для літер і чисел
+            temp = []
+            data = remove_punctuation(data)
+            for word in data:
+                for i in word:
+                    if i == ' ':
+                        continue
+                    temp.append(i)
+            L = len(temp)
+            return temp
             
         elif split == 'symbol':
-            # Обробка для символів - ефективніше обробляємо символи
+            # Обробка для символів
             result = []
             for char in data:
                 if char == " " or char == "\n" or char == "\ufeff":
@@ -623,55 +617,40 @@ def prepare_data(data: str, n: int, split: str) -> List:
                 window = tuple(words[i:i + n])
                 result.append(window)
             
-            # Звільняємо пам'ять
-            del processor
-            del words
             return result
                 
         elif split == "letter":
-            # Обробка для n-грам літер
-            processed = remove_punctuation(data.split())
-            processed = [item for item in processed if item]  # Видаляємо порожні рядки
-            
-            letter_data = []
-            for word in processed:
-                for char in word:
-                    if not is_valid_letter(char):
-                        letter_data.append(char)
-            
-            L = len(letter_data)
-            
-            # Створюємо n-грами з літер
-            result = []
+            # Обробка для n-грам літер і чисел
+            temp = []
+            data = remove_punctuation(data)
+            for word in data:
+                for i in word:
+                    if i == ' ':
+                        continue
+                    temp.append(i)
+            L = len(temp)
+            data = temp
+            temp = []
             for i in range(L - n + 1):
-                window = tuple(letter_data[i:i + n])
-                result.append(window)
-            
-            # Звільняємо пам'ять
-            del processed
-            del letter_data
-            return result
+                window = tuple(data[i:i + n])
+                temp.append(window)
+            return temp
                 
         elif split == 'symbol':
             # Обробка для n-грам символів
-            symbol_data = []
+            temp = []
             for char in data:
                 if char == " " or char == "\n" or char == "\ufeff":
-                    symbol_data.append("space")
+                    temp.append("space")
                 else:
-                    symbol_data.append(char.lower())
-            
-            L = len(symbol_data)
-            
-            # Створюємо n-грами з символів
-            result = []
-            for i in range(L - n + 1):
-                window = tuple(symbol_data[i:i + n])
-                result.append(window)
-            
-            # Звільняємо пам'ять
-            del symbol_data
-            return result
+                    temp.append(char.lower())
+            data = temp
+            temp = []
+            L = len(data) - n
+            for i in range(L):
+                window = tuple(data[i:i + n])
+                temp.append(window)
+            return temp
     
     return []
 
@@ -853,12 +832,11 @@ layout1 = html.Div([
                                             dbc.Select(
                                                 id="split",
                                                 options=[
-                                                    {"label": "symbol", "value": "symbol"},
                                                     {"label": "word", "value": "word"},
-                                                    {"label": "letter", "value": "letter"}
+                                                    {"label": "letter&number", "value": "letter"},
+                                                    {"label": "symbol", "value": "symbol"},
                                                 ],
-                                                value="word",
-                                                style={"font-weight": "bold"}
+                                                value="word"
                                             )
                                         ], 
                                         size="md", 
@@ -1032,6 +1010,17 @@ layout1 = html.Div([
                                               style={"fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}, 
                                               disabled=analyze_visible),
 
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.InputGroupText("Save path"),
+                                            dbc.Input(
+                                                id="save_path",
+                                                placeholder="Enter save path or leave empty for default",
+                                                type="text"
+                                            ),
+                                        ],
+                                        className="mb-2"
+                                    ),
                                     dbc.Button("Save data", id="save", color="danger", 
                                               className="w-100",
                                               style={"fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}),
@@ -1186,9 +1175,7 @@ layout1 = html.Div([
                                                 }
                                             ]
                                         )),
-                                        dbc.Button("Save Batch Results", id="save_batch", color="info", 
-                                                  className="mt-2", 
-                                                  style={'marginTop': '10px', "fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}),
+                                        # Remove the old batch save button
                                     ], id="batch_results_container", style={"display": "none"})
                                 ]
                             )
@@ -1284,15 +1271,6 @@ layout1 = html.Div([
         children="Length has not been calculated yet!",
         style={"position": "fixed", "top": "40%", "right": "40%", "width": 500, "zIndex": 9999}
     ),
-    # Add a manual memory cleanup button to the interface
-    html.Button(
-        "Очистити пам'ять",
-        id="memory_cleanup",
-        className="btn btn-warning",
-        style={"margin": "10px"}
-    ),
-    # Add a div to show memory cleanup status
-    html.Div(id="memory_cleanup_status", style={"margin": "10px", "color": "green"})
 ])
 from dash.dependencies import Input, Output, State
 
@@ -1373,21 +1351,11 @@ class NgrammProcessor:
 
 def is_valid_letter(char: str) -> bool:
     """
-    Перевіряє, чи є символ допустимою літерою для аналізу.
-    
-    Args:
-        char: Символ для перевірки
-        
-    Returns:
-        bool: True, якщо символ НЕ є допустимою літерою (тобто, має бути пропущений),
-              False, якщо символ Є допустимою літерою (тобто, має бути збережений)
-              
-    Note:
-        Функція має зворотну логіку: повертає True для символів, які слід ПРОПУСТИТИ,
-        і False для символів, які слід ВКЛЮЧИТИ в аналіз.
+    Check if a character should be skipped.
+    Returns True if character should be skipped.
     """
     invalid_characters = [' ', '\n', '\ufeff', '°', '"', '„', '–']
-    return is_number(char) or char in invalid_characters
+    return char in invalid_characters
 
 
 length_updated = False
@@ -1645,11 +1613,17 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
                 file_text = re.sub(r'	', '', file_content)
                 processed_data = remove_punctuation(file_text)
                 temp = []
-                for word in processed_data:
-                    for i in word:
-                        if is_valid_letter(i):
-                            continue
-                        temp.append(i)
+                current_number = ""
+                
+                for char in processed_data:
+                    if char.isspace() or char == '\n' or char == '\ufeff':
+                        if current_number:
+                            temp.append(current_number)
+                            current_number = ""
+                        continue
+                    if char.isdigit() or char.isalpha():
+                        temp.append(char)
+                
                 data = temp
                 # Free memory immediately
                 del processed_data
@@ -2467,46 +2441,60 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                State("condition", "value"),
                State("def", "value"),
                State("min_dist_option", "value"),
-               State("overlap_mode", "value")])
-def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w_max, fmin, opt, definition, min_dist_option, overlap_mode):
-    if n is None or filename is None:
+               State("overlap_mode", "value"),
+               State("save_path", "value")])
+def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w_max, fmin, opt, definition, min_dist_option, overlap_mode, save_path):
+    if n is None:
         return dash.no_update
+
+    # Determine if we're in batch mode
+    is_batch_mode = batch_results is not None and len(batch_results) > 0
+
+    if is_batch_mode:
+        # Handle batch mode save
+        try:
+            # Create DataFrame from batch results
+            df_batch = pd.DataFrame(batch_results)
+            
+            # Create filename with parameters
+            if save_path:
+                output_filename = f"{save_path}/batch_results_n={n_size},split={opt},condition={opt},definition={definition},min_dist={min_dist_option},overlap={overlap_mode}.xlsx"
+            else:
+                output_filename = "saved_data/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={}.xlsx".format(
+                    n_size, opt, opt, definition, min_dist_option, overlap_mode)
+            
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(output_filename), exist_ok=True)
+            
+            # Save to Excel
+            writer = pd.ExcelWriter(output_filename)
+            df_batch.to_excel(writer, index=False)
+            writer.save()
+            
+            return [html.Div(["Saved batch results to {}".format(output_filename)])]
+        except Exception as e:
+            return [html.Div(["Error saving batch results: {}".format(str(e))])]
     else:
-        # The file parameter is now the selected filename
-        file = filename
+        # Handle single file mode save
+        if filename is None:
+            return [html.Div(["No file selected"])]
+            
         global df, model, new_ngram
-
-        #   2023
-        #   Зміни в save
-        #   - вивід без new_ngram
-        #   - додаткові параметри
-
-        # Create a copy to avoid modifying the global df directly during calculations if needed
         df_copy = df.copy()
-
         df_copy = df_copy[df_copy.ngram != 'new_ngram']
-
-        # Recalculate rank if needed (ensure it's 0-based or 1-based consistently)
-        # If starting from 0:
-        # df_copy['rank'] = range(len(df_copy))
-        # If starting from 1 (like original):
         df_copy['rank'] = range(1, len(df_copy) + 1)
 
-
-        if len(df_copy) > 0: # Ensure dataframe is not empty before calculating stats
+        if len(df_copy) > 0:
             df_copy['w'] = (df_copy['F']) / (df_copy['F'].sum())
-
             R_avg = df_copy['R'].mean()
             dR = df_copy['R'].std()
             Rw_avg = (df_copy['R'] * df_copy['w']).sum()
             dRw = np.sqrt((((df_copy['R'] - Rw_avg) ** 2) * df_copy['w']).sum())
-
             gamma_avg = df_copy['gamma'].mean()
             dgamma = df_copy['gamma'].std()
             gammaw_avg = (df_copy['gamma'] * df_copy['w']).sum()
             dgammaw = np.sqrt((((df_copy['gamma'] - gammaw_avg) ** 2) * df_copy['w']).sum())
 
-            # Assign calculated values using .loc to avoid SettingWithCopyWarning
             df_copy.loc[:, 'R_avg'] = None
             df_copy.loc[df_copy.index[0], 'R_avg'] = R_avg
             df_copy.loc[:, 'dR'] = None
@@ -2515,7 +2503,6 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             df_copy.loc[df_copy.index[0], 'Rw_avg'] = Rw_avg
             df_copy.loc[:, 'dRw'] = None
             df_copy.loc[df_copy.index[0], 'dRw'] = dRw
-
             df_copy.loc[:, 'gamma_avg'] = None
             df_copy.loc[df_copy.index[0], 'gamma_avg'] = gamma_avg
             df_copy.loc[:, 'dgamma'] = None
@@ -2524,98 +2511,78 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             df_copy.loc[df_copy.index[0], 'gammaw_avg'] = gammaw_avg
             df_copy.loc[:, 'dgammaw'] = None
             df_copy.loc[df_copy.index[0], 'dgammaw'] = dgammaw
-
-            # Remove temporary 'w' column if not needed in the final output
             df_copy = df_copy.drop(columns=['w'])
 
-        else:
-             # Handle empty dataframe case if necessary
-             # Maybe return an alert or log a message
-             print("Warning: DataFrame is empty after filtering 'new_ngram'. Cannot save stats.")
-             # Decide how to handle df_copy columns if it's empty
-             pass
-
-
         if definition == "dynamic":
-            output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(file, fmin, n_size, w_s, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
-            # Changed to older pandas style without with context
+            if save_path:
+                output_filename = f"{save_path}/{filename} condition={opt},fmin={fmin},n={n_size},w=({w_s},{w_s},{w_e},{w_max}),definition={definition},min_dist={min_dist_option},overlap={overlap_mode}.xlsx"
+            else:
+                output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
+                    filename, fmin, n_size, w_s, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
+            
+            os.makedirs(os.path.dirname(output_filename), exist_ok=True)
             writer = pd.ExcelWriter(output_filename)
             df_copy.to_excel(writer, index=False)
             writer.save()
 
-            if active_cell and new_ngram: # Check if new_ngram exists
-                # Existing logic for saving new_ngram data...
-                # NOTE: Ensure that 'active_cell' logic correctly identifies the row AFTER filtering 'new_ngram'
-                # This part might need review depending on whether active_cell refers to the original df or df_copy
-                # Assuming it refers to the state *before* this function modified df globally
-
-                # Handle potential errors if ids or active_cell['row'] are invalid for the *original* df
+            if active_cell and new_ngram:
                 try:
-                    # Original logic used global df, let's assume we still need info based on the original selection state
-                    original_df = df # Reference the global df as it was upon entering the function
-                    current_ids = ids # Use the passed ids
-
-                    # Correct row index considering pagination
+                    original_df = df
+                    current_ids = ids
                     row_index = active_cell['row']
                     if page_current is not None and page_current > 0:
-                         row_index += page_current * 50 # Assuming page size is 50
+                        row_index += page_current * 50
 
-                    # Get the ngram based on the original selection state
-                    # Check if the selected index is valid in the *original* derived indices
                     if current_ids is not None and row_index < len(current_ids):
                         selected_original_index = current_ids[row_index]
-                        # Check if this index exists in the original df before filtering
                         if selected_original_index < len(original_df):
-                             ngram_to_save_details = original_df.iloc[selected_original_index]['ngram']
-
-                             # Ensure it's not the filtered 'new_ngram' (though unlikely if active_cell logic is sound)
-                             if ngram_to_save_details != 'new_ngram':
-
-                                 details_filename = "saved_data/{} {}_details.xlsx".format(file, ngram_to_save_details)
-                                 # Changed to older pandas style without with context
-                                 writer_details = pd.ExcelWriter(details_filename)
-                                 df1 = pd.DataFrame()
-                                 # Check if the ngram exists in the global model (might have been filtered)
-                                 if ngram_to_save_details in model:
-                                     df1["w"] = list(model[ngram_to_save_details].fa.keys())
-                                     df1['∆F'] = list(model[ngram_to_save_details].fa.values()) # Original code had '∆F', assuming this is correct?
-                                     df1['fit=a*w^b'] = model[ngram_to_save_details].temp_fa
-                                     df1.to_excel(writer_details, index=False)
-                                     writer_details.save()
-                                 # Also save new_ngram specific data
-                                 if new_ngram: # Save new_ngram details if definition is dynamic
-                                     new_ngram_details_filename = "saved_data/{} new_ngram_dynamic_details.xlsx".format(file)
-                                     writer_new_ngram = pd.ExcelWriter(new_ngram_details_filename)
-                                     df_new = pd.DataFrame()
-                                     df_new["w"] = list(new_ngram.dfa.keys())
-                                     df_new['∆F'] = list(new_ngram.dfa.values()) # Original used ∆F here
-                                     df_new['fit=a*w^b'] = new_ngram.temp_dfa
-                                     df_new.to_excel(writer_new_ngram, index=False)
-                                     writer_new_ngram.save()
-
-                        else:
-                            print("Warning: Selected index {} out of bounds for original DataFrame.".format(selected_original_index))
-                    else:
-                        print("Warning: Calculated row index {} is invalid for derived indices.".format(row_index))
-
+                            ngram_to_save_details = original_df.iloc[selected_original_index]['ngram']
+                            if ngram_to_save_details != 'new_ngram':
+                                if save_path:
+                                    details_filename = f"{save_path}/{filename} {ngram_to_save_details}_details.xlsx"
+                                else:
+                                    details_filename = "saved_data/{} {}_details.xlsx".format(filename, ngram_to_save_details)
+                                
+                                writer_details = pd.ExcelWriter(details_filename)
+                                df1 = pd.DataFrame()
+                                if ngram_to_save_details in model:
+                                    df1["w"] = list(model[ngram_to_save_details].fa.keys())
+                                    df1['∆F'] = list(model[ngram_to_save_details].fa.values())
+                                    df1['fit=a*w^b'] = model[ngram_to_save_details].temp_fa
+                                    df1.to_excel(writer_details, index=False)
+                                    writer_details.save()
+                                
+                                if new_ngram:
+                                    if save_path:
+                                        new_ngram_details_filename = f"{save_path}/{filename} new_ngram_dynamic_details.xlsx"
+                                    else:
+                                        new_ngram_details_filename = "saved_data/{} new_ngram_dynamic_details.xlsx".format(filename)
+                                    
+                                    writer_new_ngram = pd.ExcelWriter(new_ngram_details_filename)
+                                    df_new = pd.DataFrame()
+                                    df_new["w"] = list(new_ngram.dfa.keys())
+                                    df_new['∆F'] = list(new_ngram.dfa.values())
+                                    df_new['fit=a*w^b'] = new_ngram.temp_dfa
+                                    df_new.to_excel(writer_new_ngram, index=False)
+                                    writer_new_ngram.save()
                 except Exception as e:
                     print("Error saving detailed ngram file (dynamic): {}".format(e))
-                    # Potentially add a Dash alert to inform the user
 
-
-            return [html.Div("Saved data to {}".format(output_filename))] # Provide feedback
+            return [html.Div("Saved data to {}".format(output_filename))]
 
         # Static definition part
-        output_filename_static = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
-                file, fmin, n_size, w_s, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode
-            )
-        # Changed to older pandas style without with context 
+        if save_path:
+            output_filename_static = f"{save_path}/{filename} condition={opt},fmin={fmin},n={n_size},w=({w_s},{w_s},{w_e},{w_max}),definition={definition},min_dist={min_dist_option},overlap={overlap_mode}.xlsx"
+        else:
+            output_filename_static = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
+                filename, fmin, n_size, w_s, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
+        
+        os.makedirs(os.path.dirname(output_filename_static), exist_ok=True)
         writer = pd.ExcelWriter(output_filename_static)
         df_copy.to_excel(writer, index=False)
         writer.save()
 
         if active_cell:
-            # Similar logic as above to get the correct ngram based on original selection state
             try:
                 original_df = df
                 current_ids = ids
@@ -2624,38 +2591,27 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                     row_index += page_current * 50
 
                 if current_ids is not None and row_index < len(current_ids):
-                     selected_original_index = current_ids[row_index]
-                     if selected_original_index < len(original_df):
+                    selected_original_index = current_ids[row_index]
+                    if selected_original_index < len(original_df):
                         ngram = original_df.iloc[selected_original_index]['ngram']
-
-                        # Ensure it's not 'new_ngram' (already filtered in df_copy, but check original selection)
                         if ngram != 'new_ngram':
-                            # Check if ngram exists in the model dictionary
                             if ngram in model:
-                                details_filename_static = "saved_data/{} {}.xlsx".format(file, ngram)
-                                # Changed to older pandas style without with context
+                                if save_path:
+                                    details_filename_static = f"{save_path}/{filename} {ngram}.xlsx"
+                                else:
+                                    details_filename_static = "saved_data/{} {}.xlsx".format(filename, ngram)
+                                
                                 writer_details = pd.ExcelWriter(details_filename_static)
                                 df1 = pd.DataFrame()
                                 df1["w"] = list(model[ngram].fa.keys())
-                                df1['∆F'] = list(model[ngram].fa.values()) # Original used ∆F here
+                                df1['∆F'] = list(model[ngram].fa.values())
                                 df1['fit=a*w^b'] = model[ngram].temp_fa
                                 df1.to_excel(writer_details, index=False)
                                 writer_details.save()
-                            else:
-                                print("Warning: Ngram '{}' selected but not found in model for detail saving.".format(ngram))
-                     else:
-                        print("Warning: Selected index {} out of bounds for original DataFrame (static).".format(selected_original_index))
-                else:
-                    print("Warning: Calculated row index {} is invalid for derived indices (static).".format(row_index))
-
             except Exception as e:
                 print("Error saving detailed ngram file (static): {}".format(e))
-                # Potentially add a Dash alert
 
-    # Use the modified df_copy for saving, keep global df potentially unchanged if needed elsewhere
-    # Or update global df if necessary: df = df_copy
-    # For now, just provide feedback
-    return [html.Div("Saved data.")] # Generic feedback if filename isn't always generated
+    return [html.Div("Saved data.")]
 
 
 # import webbrowser # Commented out as it might cause issues if run non-interactively
@@ -2672,27 +2628,3 @@ if __name__ == "__main__":
 )
 def toggle_batch_window_controls(mode):
     return mode in ["ui", "auto"]
-
-# Add callback for memory cleanup button
-@app.callback(
-    Output("memory_cleanup_status", "children"),
-    [Input("memory_cleanup", "n_clicks")]
-)
-def cleanup_memory(n_clicks):
-    if n_clicks is None:
-        return ""
-    
-    # Force aggressive memory cleanup
-    clear_memory()
-    
-    # Force Python's garbage collector
-    import gc
-    gc.collect(generation=2)
-    gc.collect(generation=1)
-    gc.collect(generation=0)
-    
-    return "Пам'ять очищено!"
-
-# Add a div to show memory cleanup status
-memory_status_div = html.Div(id="memory_cleanup_status", style={"margin": "10px", "color": "green"})
-app.layout.children[2].children[2].children.append(memory_status_div)

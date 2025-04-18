@@ -339,8 +339,8 @@ def nbc(pos, L, min_dist=1):
     
     for i in prange(n - 1):
         dt[i] = pos[i + 1] - pos[i]
-        if dt[i] < min_dist:
-            dt[i] = min_dist
+        if min_dist==0:
+            dt[i] -= 1
     
     return dt
 
@@ -367,15 +367,15 @@ def pbc(pos, L, min_dist=1):
         dt[i] = pos[i + 1] - pos[i]
         if dt[i] > L // 2:
             dt[i] = L - dt[i]
-        if dt[i] < min_dist:
-            dt[i] = min_dist
+        if min_dist==0:
+            dt[i] -= -1
     
     # Останній елемент обчислюємо окремо через періодичність
     dt[n - 1] = L - pos[n - 1] + pos[0]
     if dt[n - 1] > L // 2:
         dt[n - 1] = L - dt[n - 1]
-    if dt[n - 1] < min_dist:
-        dt[n - 1] = min_dist
+    if min_dist==0:
+        dt[n - 1] -= 1
     
     return dt
 
@@ -400,13 +400,15 @@ def obc(pos, L, min_dist=1):
     
     for i in prange(n - 1):
         dt[i] = pos[i + 1] - pos[i]
-        if dt[i] < min_dist:
-            dt[i] = min_dist
+        if min_dist==0:
+            dt[i] -= 1
     
     # Останній елемент обчислюємо окремо
     dt[n - 1] = L - pos[n - 1] + pos[0]
     if dt[n - 1] < min_dist:
         dt[n - 1] = min_dist
+    if min_dist==0:
+        dt[n - 1] -= 1
     
     return dt
 
@@ -1974,6 +1976,7 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
         writer = pd.ExcelWriter(output_filename)
         df_batch.to_excel(writer, index=False)
         writer.save()
+        #writer.close()
         
         return html.Div(["Saved batch results to {}".format(output_filename)])
     except Exception as e:
@@ -2470,6 +2473,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             writer = pd.ExcelWriter(output_filename)
             df_batch.to_excel(writer, index=False)
             writer.save()
+            #writer.close()
             
             return [html.Div(["Saved batch results to {}".format(output_filename)])]
         except Exception as e:
@@ -2524,6 +2528,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             writer = pd.ExcelWriter(output_filename)
             df_copy.to_excel(writer, index=False)
             writer.save()
+            #writer.close()
 
             if active_cell and new_ngram:
                 try:
@@ -2551,6 +2556,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                                     df1['fit=a*w^b'] = model[ngram_to_save_details].temp_fa
                                     df1.to_excel(writer_details, index=False)
                                     writer_details.save()
+                                    #writer_details.close()
                                 
                                 if new_ngram:
                                     if save_path:
@@ -2565,6 +2571,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                                     df_new['fit=a*w^b'] = new_ngram.temp_dfa
                                     df_new.to_excel(writer_new_ngram, index=False)
                                     writer_new_ngram.save()
+                                    #writer_new_ngram.close()
                 except Exception as e:
                     print("Error saving detailed ngram file (dynamic): {}".format(e))
 
@@ -2581,6 +2588,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
         writer = pd.ExcelWriter(output_filename_static)
         df_copy.to_excel(writer, index=False)
         writer.save()
+        #writer.close()
 
         if active_cell:
             try:
@@ -2608,6 +2616,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                                 df1['fit=a*w^b'] = model[ngram].temp_fa
                                 df1.to_excel(writer_details, index=False)
                                 writer_details.save()
+                                #writer_details.close()
             except Exception as e:
                 print("Error saving detailed ngram file (static): {}".format(e))
 

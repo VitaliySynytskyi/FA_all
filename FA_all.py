@@ -955,6 +955,24 @@ layout1 = html.Div([
                                     ], className="mb-3"),
                                 ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
 
+                                # ACTION BUTTONS SECTION
+                                html.Div([
+                                    html.H6("Actions", 
+                                           className="text-primary text-center mb-2", 
+                                           style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
+                                    
+                                    dbc.Button("Analyze", id="chain_button", color="primary", 
+                                              className="w-100 mb-2", 
+                                              style={"fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}, 
+                                              disabled=analyze_visible),
+                                    dbc.Button("Save data", id="save", color="danger", 
+                                              className="w-100",
+                                              style={"fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}),
+                                    html.Div(id="temp_seve",
+                                             children=[]
+                                             ),
+                                ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
+
                                 # BATCH PROCESSING SECTION
                                 html.Div([
                                     html.H6("Batch Processing", 
@@ -1000,40 +1018,12 @@ layout1 = html.Div([
                                     dbc.Button("Process All Files", id="batch_process", color="success", 
                                               className="w-100", 
                                               style={'marginBottom': '10px', "fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}),
+                                    dbc.Button("Save Batch Results", id="save_batch", color="primary",
+                                              className="w-100",
+                                              style={'marginBottom': '10px', "fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}),
+                                    html.Div(id="temp_seve_batch", style={'marginBottom': '10px'}),
                                 ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
                                 
-                                # ACTION BUTTONS SECTION
-                                html.Div([
-                                    html.H6("Actions", 
-                                           className="text-primary text-center mb-2", 
-                                           style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
-                                    
-                                    dbc.Button("Analyze", id="chain_button", color="primary", 
-                                              className="w-100 mb-2", 
-                                              style={"fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}, 
-                                              disabled=analyze_visible),
-
-                                    dbc.InputGroup(
-                                        [
-                                            dbc.InputGroupText("Save path"),
-                                            dbc.Input(
-                                                id="save_path",
-                                                placeholder="Enter save path or leave empty for default",
-                                                type="text"
-                                            ),
-                                        ],
-                                        className="mb-2"
-                                    ),
-                                    dbc.Button("Save data", id="save", color="danger", 
-                                              className="w-100",
-                                              style={"fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}),
-                                    html.Div(id="temp_seve",
-                                             children=[]
-                                             ),
-                                    html.Div(id="temp_seve_batch",
-                                             children=[]
-                                             )
-                                ]),
                                 html.Div(id="alert", children=[])
                                 # html.H6("Boundary Condition:"),
                                 # dcc.RadioItems(id='condition',options=[{"label":"no","value":"no"},{"label":"periodic","value":"periodic"},{"label":"ordinary","value":"ordinary"}],value="words"),
@@ -1953,7 +1943,9 @@ def update_batch_table_columns(n_clicks):
      State("batch_window_mode", "value")]
 )
 def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_option, overlap_mode, batch_window_mode):
-    if n_clicks is None or not batch_results:
+    if n_clicks is None:
+        return dash.no_update
+    if not batch_results:
         return html.Div(["No batch results to save"])
     
     try:
@@ -2472,238 +2464,127 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                State("min_dist_option", "value"),
                State("overlap_mode", "value")])
 def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w_max, fmin, opt, definition, min_dist_option, overlap_mode):
-    if n is None or filename is None:
-
+    if n is None:
         return dash.no_update
-    else:
-        # The file parameter is now the selected filename
+    if filename is None:
+        return [html.Div(["No file selected to save"])]
+    
+    try:
         file = filename
         global df, model, new_ngram
 
-        #   2023
-        #   Зміни в save
-        #   - вивід без new_ngram
-        #   - додаткові параметри
-
-        # Create a copy to avoid modifying the global df directly during calculations if needed
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        df_copy = df.copy()
-
-        df_copy = df_copy[df_copy.ngram != 'new_ngram']
-
-        # Recalculate rank if needed (ensure it's 0-based or 1-based consistently)
-        # If starting from 0:
-        # df_copy['rank'] = range(len(df_copy))
-        # If starting from 1 (like original):
-        df_copy['rank'] = range(1, len(df_copy) + 1)
-
-
-        if len(df_copy) > 0: # Ensure dataframe is not empty before calculating stats
-            df_copy['w'] = (df_copy['F']) / (df_copy['F'].sum())
-
-            R_avg = df_copy['R'].mean()
-            dR = df_copy['R'].std()
-            Rw_avg = (df_copy['R'] * df_copy['w']).sum()
-            dRw = np.sqrt((((df_copy['R'] - Rw_avg) ** 2) * df_copy['w']).sum())
-
-            gamma_avg = df_copy['gamma'].mean()
-            dgamma = df_copy['gamma'].std()
-            gammaw_avg = (df_copy['gamma'] * df_copy['w']).sum()
-            dgammaw = np.sqrt((((df_copy['gamma'] - gammaw_avg) ** 2) * df_copy['w']).sum())
-
-            # Assign calculated values using .loc to avoid SettingWithCopyWarning
-            df_copy.loc[:, 'R_avg'] = None
-            df_copy.loc[df_copy.index[0], 'R_avg'] = R_avg
-            df_copy.loc[:, 'dR'] = None
-            df_copy.loc[df_copy.index[0], 'dR'] = dR
-            df_copy.loc[:, 'Rw_avg'] = None
-            df_copy.loc[df_copy.index[0], 'Rw_avg'] = Rw_avg
-            df_copy.loc[:, 'dRw'] = None
-            df_copy.loc[df_copy.index[0], 'dRw'] = dRw
-
-            df_copy.loc[:, 'gamma_avg'] = None
-            df_copy.loc[df_copy.index[0], 'gamma_avg'] = gamma_avg
-            df_copy.loc[:, 'dgamma'] = None
-            df_copy.loc[df_copy.index[0], 'dgamma'] = dgamma
-            df_copy.loc[:, 'gammaw_avg'] = None
-            df_copy.loc[df_copy.index[0], 'gammaw_avg'] = gammaw_avg
-            df_copy.loc[:, 'dgammaw'] = None
-            df_copy.loc[df_copy.index[0], 'dgammaw'] = dgammaw
-
-            # Remove temporary 'w' column if not needed in the final output
-            df_copy = df_copy.drop(columns=['w'])
-
-        else:
-             # Handle empty dataframe case if necessary
-             # Maybe return an alert or log a message
-             print("Warning: DataFrame is empty after filtering 'new_ngram'. Cannot save stats.")
-             # Decide how to handle df_copy columns if it's empty
-             pass
-
-
+        # For dynamic mode, we want to save exactly what's shown in the table
         if definition == "dynamic":
-            output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(file, fmin, n_size, w_s, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
-            # Changed to older pandas style without with context
+            # Create DataFrame with the new_ngram row
+            df_to_save = df.copy()  # This will include the new_ngram row
+            
+            output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
+                file, fmin, n_size, w_min, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
+            
+            # Ensure save directory exists
+            os.makedirs("saved_data", exist_ok=True)
+            
+            # Save the main file with new_ngram data
+            writer = pd.ExcelWriter(output_filename)
+            df_to_save.to_excel(writer, index=False)
+            writer.save()
 
+            # If new_ngram exists and we have its details, save them too
+            if new_ngram and hasattr(new_ngram, 'dfa'):
+                details_filename = "saved_data/{} new_ngram_details.xlsx".format(file)
+                writer_details = pd.ExcelWriter(details_filename)
+                df_details = pd.DataFrame()
+                df_details["w"] = list(new_ngram.dfa.keys())
+                df_details['∆F'] = list(new_ngram.dfa.values())
+                df_details['fit=a*w^b'] = new_ngram.temp_dfa
+                df_details.to_excel(writer_details, index=False)
+                writer_details.save()
+                return [html.Div([
+                    "Saved main data to {}".format(output_filename),
+                    html.Br(),
+                    "Saved new_ngram details to {}".format(details_filename)
+                ])]
+            
+            return [html.Div(["Saved data to {}".format(output_filename)])]
+        
+        else:  # For non-dynamic mode, keep existing logic
+            df_copy = df.copy()
+            df_copy = df_copy[df_copy.ngram != 'new_ngram']
+            df_copy['rank'] = range(1, len(df_copy) + 1)
 
+            if len(df_copy) > 0:
+                df_copy['w'] = (df_copy['F']) / (df_copy['F'].sum())
 
+                R_avg = df_copy['R'].mean()
+                dR = df_copy['R'].std()
+                Rw_avg = (df_copy['R'] * df_copy['w']).sum()
+                dRw = np.sqrt((((df_copy['R'] - Rw_avg) ** 2) * df_copy['w']).sum())
 
+                gamma_avg = df_copy['gamma'].mean()
+                dgamma = df_copy['gamma'].std()
+                gammaw_avg = (df_copy['gamma'] * df_copy['w']).sum()
+                dgammaw = np.sqrt((((df_copy['gamma'] - gammaw_avg) ** 2) * df_copy['w']).sum())
 
+                df_copy.loc[:, 'R_avg'] = None
+                df_copy.loc[df_copy.index[0], 'R_avg'] = R_avg
+                df_copy.loc[:, 'dR'] = None
+                df_copy.loc[df_copy.index[0], 'dR'] = dR
+                df_copy.loc[:, 'Rw_avg'] = None
+                df_copy.loc[df_copy.index[0], 'Rw_avg'] = Rw_avg
+                df_copy.loc[:, 'dRw'] = None
+                df_copy.loc[df_copy.index[0], 'dRw'] = dRw
+
+                df_copy.loc[:, 'gamma_avg'] = None
+                df_copy.loc[df_copy.index[0], 'gamma_avg'] = gamma_avg
+                df_copy.loc[:, 'dgamma'] = None
+                df_copy.loc[df_copy.index[0], 'dgamma'] = dgamma
+                df_copy.loc[:, 'gammaw_avg'] = None
+                df_copy.loc[df_copy.index[0], 'gammaw_avg'] = gammaw_avg
+                df_copy.loc[:, 'dgammaw'] = None
+                df_copy.loc[df_copy.index[0], 'dgammaw'] = dgammaw
+
+                df_copy = df_copy.drop(columns=['w'])
+
+            output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
+                file, fmin, n_size, w_min, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
+            
+            os.makedirs("saved_data", exist_ok=True)
+            
             writer = pd.ExcelWriter(output_filename)
             df_copy.to_excel(writer, index=False)
             writer.save()
-            #writer.close()
 
-            if active_cell and new_ngram: # Check if new_ngram exists
-                # Existing logic for saving new_ngram data...
-                # NOTE: Ensure that 'active_cell' logic correctly identifies the row AFTER filtering 'new_ngram'
-                # This part might need review depending on whether active_cell refers to the original df or df_copy
-                # Assuming it refers to the state *before* this function modified df globally
-
-                # Handle potential errors if ids or active_cell['row'] are invalid for the *original* df
+            if active_cell:
                 try:
-                    # Original logic used global df, let's assume we still need info based on the original selection state
-                    original_df = df # Reference the global df as it was upon entering the function
-                    current_ids = ids # Use the passed ids
-
-                    # Correct row index considering pagination
                     row_index = active_cell['row']
                     if page_current is not None and page_current > 0:
-                         row_index += page_current * 50 # Assuming page size is 50
+                        row_index += page_current * 50
 
-                    # Get the ngram based on the original selection state
-                    # Check if the selected index is valid in the *original* derived indices
-                    if current_ids is not None and row_index < len(current_ids):
-                        selected_original_index = current_ids[row_index]
-                        # Check if this index exists in the original df before filtering
-                        if selected_original_index < len(original_df):
-                             ngram_to_save_details = original_df.iloc[selected_original_index]['ngram']
-
-                             # Ensure it's not the filtered 'new_ngram' (though unlikely if active_cell logic is sound)
-                             if ngram_to_save_details != 'new_ngram':
-
-                                 details_filename = "saved_data/{} {}_details.xlsx".format(file, ngram_to_save_details)
-                                 # Changed to older pandas style without with context
-                                 writer_details = pd.ExcelWriter(details_filename)
-                                 df1 = pd.DataFrame()
-                                 # Check if the ngram exists in the global model (might have been filtered)
-                                 if ngram_to_save_details in model:
-                                     df1["w"] = list(model[ngram_to_save_details].fa.keys())
-                                     df1['∆F'] = list(model[ngram_to_save_details].fa.values()) # Original code had '∆F', assuming this is correct?
-                                     df1['fit=a*w^b'] = model[ngram_to_save_details].temp_fa
-                                     df1.to_excel(writer_details, index=False)
-                                     writer_details.save()
-                                     #writer_details.close()
-                                 # Also save new_ngram specific data
-                                 if new_ngram: # Save new_ngram details if definition is dynamic
-                                     new_ngram_details_filename = "saved_data/{} new_ngram_dynamic_details.xlsx".format(file)
-                                     writer_new_ngram = pd.ExcelWriter(new_ngram_details_filename)
-                                     df_new = pd.DataFrame()
-                                     df_new["w"] = list(new_ngram.dfa.keys())
-                                     df_new['∆F'] = list(new_ngram.dfa.values()) # Original used ∆F here
-                                     df_new['fit=a*w^b'] = new_ngram.temp_dfa
-                                     df_new.to_excel(writer_new_ngram, index=False)
-                                     writer_new_ngram.save()
-
-                        else:
-                            print("Warning: Selected index {} out of bounds for original DataFrame.".format(selected_original_index))
-                    else:
-                        print("Warning: Calculated row index {} is invalid for derived indices.".format(row_index))
-
-                except Exception as e:
-                    print("Error saving detailed ngram file (dynamic): {}".format(e))
-                    # Potentially add a Dash alert to inform the user
-
-
-            return [html.Div("Saved data to {}".format(output_filename))] # Provide feedback
-
-        # Static definition part
-        output_filename_static = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
-                file, fmin, n_size, w_s, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode
-            )
-        # Changed to older pandas style without with context 
-
-
-
-        writer = pd.ExcelWriter(output_filename_static)
-        df_copy.to_excel(writer, index=False)
-        writer.save()
-        #writer.close()
-
-        if active_cell:
-            # Similar logic as above to get the correct ngram based on original selection state
-            try:
-                original_df = df
-                current_ids = ids
-                row_index = active_cell['row']
-                if page_current is not None and page_current > 0:
-                    row_index += page_current * 50
-
-                if current_ids is not None and row_index < len(current_ids):
-                     selected_original_index = current_ids[row_index]
-                     if selected_original_index < len(original_df):
-                        ngram = original_df.iloc[selected_original_index]['ngram']
-
-                        # Ensure it's not 'new_ngram' (already filtered in df_copy, but check original selection)
-                        if ngram != 'new_ngram':
-                            # Check if ngram exists in the model dictionary
-                            if ngram in model:
-                                details_filename_static = "saved_data/{} {}.xlsx".format(file, ngram)
-                                # Changed to older pandas style without with context
-
-
-
-                                writer_details = pd.ExcelWriter(details_filename_static)
+                    if ids is not None and row_index < len(ids):
+                        selected_index = ids[row_index]
+                        if selected_index < len(df):
+                            ngram = df.iloc[selected_index]['ngram']
+                            if ngram != 'new_ngram' and ngram in model:
+                                details_filename = "saved_data/{} {}_details.xlsx".format(file, ngram)
+                                writer_details = pd.ExcelWriter(details_filename)
                                 df1 = pd.DataFrame()
                                 df1["w"] = list(model[ngram].fa.keys())
-                                df1['∆F'] = list(model[ngram].fa.values()) # Original used ∆F here
+                                df1['∆F'] = list(model[ngram].fa.values())
                                 df1['fit=a*w^b'] = model[ngram].temp_fa
                                 df1.to_excel(writer_details, index=False)
                                 writer_details.save()
-                                #writer_details.close()
-                            else:
-                                print("Warning: Ngram '{}' selected but not found in model for detail saving.".format(ngram))
-                     else:
-                        print("Warning: Selected index {} out of bounds for original DataFrame (static).".format(selected_original_index))
-                else:
-                    print("Warning: Calculated row index {} is invalid for derived indices (static).".format(row_index))
+                                return [html.Div([
+                                    "Saved main data to {}".format(output_filename),
+                                    html.Br(),
+                                    "Saved details to {}".format(details_filename)
+                                ])]
+                except Exception as e:
+                    print("Error saving ngram details: {}".format(e))
 
-            except Exception as e:
-                print("Error saving detailed ngram file (static): {}".format(e))
-                # Potentially add a Dash alert
-
-    # Use the modified df_copy for saving, keep global df potentially unchanged if needed elsewhere
-    # Or update global df if necessary: df = df_copy
-    # For now, just provide feedback
-    return [html.Div("Saved data.")] # Generic feedback if filename isn't always generated
+            return [html.Div(["Saved data to {}".format(output_filename)])]
+            
+    except Exception as e:
+        return [html.Div(["Error saving data: {}".format(str(e))])]
 
 
 # import webbrowser # Commented out as it might cause issues if run non-interactively

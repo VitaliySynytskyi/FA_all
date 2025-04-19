@@ -647,15 +647,14 @@ def prepare_data(data: str, n: int, split: str) -> List:
                 else:
                     temp.append(char.lower())
             data = temp
+            L = len(data)
             temp = []
-            L = len(data) - n
-            for i in range(L):
+            for i in range(L - n + 1):
                 window = tuple(data[i:i + n])
                 temp.append(window)
             return temp
-    
-    return []
 
+    return []
 
 def dfa(data: List, args: Tuple[int, int, int], 
        overlap_mode: str = "overlapping", 
@@ -734,7 +733,9 @@ class newNgram():
         if overlap_mode == "non-overlapping" and (min_window is None or window_expansion is None):
             min_window = self.wh
             window_expansion = self.wh
-        self.count[w], self.dfa[w] = dfa(self.data, (w, self.wh, self.l), overlap_mode, min_window, window_expansion)
+        count = dfa(self.data, (w, self.wh, self.l), overlap_mode, min_window, window_expansion)
+        self.count[w] = count
+        self.dfa[w] = float(mse(count)) # Окремо обчислюємо MSE для count
 
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -1409,15 +1410,23 @@ def update_upload_status(contents, filenames, n_size):
                 file_lengths[filename]['word'] = len(words)
                 
                 # Calculate and store symbol length
-                text_symbol = re.sub(r'	', '', file_content)
-                text_symbol = re.sub(r'\n+', '\n', text_symbol)
-                text_symbol = re.sub(r'\n\s\s', '\n', text_symbol)
-                text_symbol = re.sub(r'﻿', '', text_symbol)
-                file_lengths[filename]['symbol'] = len(text_symbol)
+                symbols = []
+                for char in file_content:
+                    if char == " " or char == "\n" or char == "\ufeff":
+                        symbols.append("space")
+                    else:
+                        symbols.append(char.lower())
+                file_lengths[filename]['symbol'] = len(symbols)
                 
                 # Calculate and store letter length
                 text_letter = remove_punctuation(file_content)
-                file_lengths[filename]['letter'] = len(text_letter)
+                letters = []
+                for word in text_letter:
+                    for i in word:
+                        if i == ' ':
+                            continue
+                        letters.append(i)
+                file_lengths[filename]['letter'] = len(letters)
                 
                 # Print detailed info to console instead of adding to upload_status
                 print(f"✓ Uploaded: {filename}")
@@ -1469,43 +1478,33 @@ def process_selected_file(selected_filename, split, definition, n):
     
     if definition == "dynamic":
         data = prepare_data(file, n, split)
+        L = len(data)
         w_max = int(L / 10)
         w_min = int(w_max / 10)
     else:
-        temp = []
         if split == "letter":
-            file = re.sub(r'	', '', file)
+            # Обробка для літер і чисел
+            temp = []
             data = remove_punctuation(file)
             for word in data:
                 for i in word:
-                    if is_valid_letter(i):
+                    if i == ' ':
                         continue
                     temp.append(i)
             data = temp
-        if split == "symbol":
-            data = file
-            data = re.sub(r'	', '', file)
-            data = re.sub(r'\n+', '\n', data)
-            data = re.sub(r'\n\s\s', '\n', data)
-            data = re.sub(r'﻿', '', data)
-            for i in data:
-                if i == " ":
+            L = len(data)
+        elif split == "symbol":
+            # Обробка для символів
+            temp = []
+            for char in file:
+                if char == " " or char == "\n" or char == "\ufeff":
                     temp.append("space")
-                elif i == "\n":
-                    temp.append("space")
-                    continue
-                elif i == "\ufeff":
-                    temp.append("space")
-                    continue
-                elif i == '﻿' or is_valid_letter(i):
-                    continue
                 else:
-                    i = i.lower()
-                    temp.append(i)
-
+                    temp.append(char.lower())
             data = temp
-
-        if split == "word":
+            L = len(data)
+        elif split == "word":
+            # Обробка для слів
             file = re.sub(r'\n+', '\n', file)
             file = re.sub(r'\n\s\s', '\n', file)
             file = re.sub(r'﻿', '', file)
@@ -1517,8 +1516,8 @@ def process_selected_file(selected_filename, split, definition, n):
 
             # Отримання слів у тексті
             data = processor.get_words()
+            L = len(data)
 
-        L = len(data)
         w_max = int(L / 20)
         w_min = int(w_max / 20)
         length_updated = True
@@ -2036,6 +2035,11 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
         w_max_val = int(w_max) if w_max is not None else 100
         w_e_val = int(w_e) if w_e is not None else 5
         
+        # Запобігання ValueError: range() arg 3 must not be zero
+        if w_e_val == 0:
+            w_e_val = 5
+            print("Warning: Window expansion (w_e) was 0, set to default value 5")
+        
         windows = list(range(w_s_val, w_max_val, w_e_val))
         
         # Створення нового n-граму та його обробка
@@ -2070,7 +2074,9 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
         
         # Використовуємо numpy масиви для ефективнішої обробки
         temp_pos_array = np.array(temp_pos, dtype=np.uint32)
-        new_ngram.dt = calculate_distance(temp_pos_array, L, condition, ngram, min_dist_option)
+        # Використовуємо перший елемент або "new_ngram" для розрахунку відстаней
+        ngram_for_calc = temp_v[0] if temp_v else "new_ngram"
+        new_ngram.dt = calculate_distance(temp_pos_array, L, condition, ngram_for_calc, min_dist_option)
         new_ngram.R = round(R(new_ngram.dt), 8)
         
         # Обробка помилок при підгонці кривої
@@ -2078,22 +2084,30 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
             dfa_keys = list(new_ngram.dfa.keys())
             dfa_values = list(new_ngram.dfa.values())
             
-            c, _ = curve_fit(fit, dfa_keys, dfa_values, method='lm', maxfev=5000)
-            new_ngram.a = round(c[0], 8)
-            new_ngram.gamma = round(c[1], 8)
-            
-            # Оптимізуємо обчислення temp_dfa
-            new_ngram.temp_dfa = [fit(w, new_ngram.a, new_ngram.gamma) for w in dfa_keys]
-            new_ngram.goodness = round(r2_score(dfa_values, new_ngram.temp_dfa), 8)
+            # Перевірка наявності достатньої кількості даних для підбору кривої
+            if len(dfa_keys) < 2 or len(dfa_values) < 2:
+                print("Недостатньо даних для підбору кривої")
+                new_ngram.a = 1.0
+                new_ngram.gamma = 0.5
+                new_ngram.temp_dfa = [1.0] * (len(dfa_keys) if dfa_keys else 1)
+                new_ngram.goodness = 0.0
+            else:
+                c, _ = curve_fit(fit, dfa_keys, dfa_values, method='lm', maxfev=5000)
+                new_ngram.a = round(c[0], 8)
+                new_ngram.gamma = round(c[1], 8)
+                
+                # Оптимізуємо обчислення temp_dfa
+                new_ngram.temp_dfa = [fit(w, new_ngram.a, new_ngram.gamma) for w in dfa_keys]
+                new_ngram.goodness = round(r2_score(dfa_values, new_ngram.temp_dfa), 8)
             
             # Звільняємо пам'ять від тимчасових змінних
             del dfa_keys, dfa_values
         except Exception as e:
-            print(f"Error in curve fitting: {e}")
-            new_ngram.a = 0
-            new_ngram.gamma = 0
+            print(f"Помилка при підборі кривої: {e}")
+            new_ngram.a = 1.0
+            new_ngram.gamma = 0.5
             new_ngram.temp_dfa = []
-            new_ngram.goodness = 0
+            new_ngram.goodness = 0.0
         
         # Створення DataFrame для представлення результатів
         df = pd.DataFrame({
@@ -2136,6 +2150,11 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
         w_s_val = int(w_s) if w_s is not None else 5
         w_max_val = int(w_max) if w_max is not None else 100
         w_e_val = int(w_e) if w_e is not None else 5
+        
+        # Запобігання ValueError: range() arg 3 must not be zero
+        if w_e_val == 0:
+            w_e_val = 5
+            print("Warning: Window expansion (w_e) was 0, set to default value 5")
         
         windows = list(range(w_s_val, w_max_val, w_e_val))
         
@@ -2299,12 +2318,17 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                                 k += 1
                             fig.add_trace(go.Bar(x=bar_positions, y=new_ngram.count[ww], name="∑∆w"))
 
-                    fig1.add_trace(
-                        go.Scatter(x=[*new_ngram.dfa.keys()], y=[*new_ngram.dfa.values()], mode='markers', name="∆F"))
-                    fig1.add_trace(go.Scatter(x=[*new_ngram.dfa.keys()], y=[*new_ngram.temp_dfa], name="fit=aw^b"))
-                    fig1.update_xaxes(type=scale)
-                    fig1.update_yaxes(type=scale)
-                    fig1.update_layout(hovermode="x unified")
+                    # Перевірка, чи existує new_ngram та його атрибути
+                    if new_ngram is not None and hasattr(new_ngram, 'dfa') and new_ngram.dfa:
+                        fig1.add_trace(
+                            go.Scatter(x=[*new_ngram.dfa.keys()], y=[*new_ngram.dfa.values()], mode='markers', name="∆F"))
+                        
+                        if hasattr(new_ngram, 'temp_dfa') and new_ngram.temp_dfa:
+                            fig1.add_trace(go.Scatter(x=[*new_ngram.dfa.keys()], y=[*new_ngram.temp_dfa], name="fit=aw^b"))
+                        
+                        fig1.update_xaxes(type=scale)
+                        fig1.update_yaxes(type=scale)
+                        fig1.update_layout(hovermode="x unified")
 
                     return fig, fig1
 
@@ -2362,10 +2386,12 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                         fig.add_trace(
                             go.Bar(x=np.arange(w_s, L, w_s), y=new_ngram.count[fa_click["points"][0]["x"]], name="∑∆w"))
 
-                    fig1.add_trace(go.Scatter(x=new_ngram.R, y=new_ngram.gamma, mode='markers', hover_data=["new_ngram"]))
-                    fig1.update_xaxes(type=scale)
-                    fig1.update_yaxes(type=scale)
-                    fig1.update_layout(hovermode="x unified")
+                    # Перевірка наявності new_ngram та його атрибутів
+                    if new_ngram is not None and hasattr(new_ngram, 'R') and hasattr(new_ngram, 'gamma'):
+                        fig1.add_trace(go.Scatter(x=new_ngram.R, y=new_ngram.gamma, mode='markers', hover_data=["new_ngram"]))
+                        fig1.update_xaxes(type=scale)
+                        fig1.update_yaxes(type=scale)
+                        fig1.update_layout(hovermode="x unified")
 
                     return fig, fig1
 
@@ -2444,61 +2470,76 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                State("condition", "value"),
                State("def", "value"),
                State("min_dist_option", "value"),
-               State("overlap_mode", "value"),
-               State("save_path", "value")])
-def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w_max, fmin, opt, definition, min_dist_option, overlap_mode, save_path):
-    if n is None:
+               State("overlap_mode", "value")])
+def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w_max, fmin, opt, definition, min_dist_option, overlap_mode):
+    if n is None or filename is None:
+
         return dash.no_update
-
-    # Determine if we're in batch mode
-    is_batch_mode = batch_results is not None and len(batch_results) > 0
-
-    if is_batch_mode:
-        # Handle batch mode save
-        try:
-            # Create DataFrame from batch results
-            df_batch = pd.DataFrame(batch_results)
-            
-            # Create filename with parameters
-            if save_path:
-                output_filename = f"{save_path}/batch_results_n={n_size},split={opt},condition={opt},definition={definition},min_dist={min_dist_option},overlap={overlap_mode}.xlsx"
-            else:
-                output_filename = "saved_data/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={}.xlsx".format(
-                    n_size, opt, opt, definition, min_dist_option, overlap_mode)
-            
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(output_filename), exist_ok=True)
-            
-            # Save to Excel
-            writer = pd.ExcelWriter(output_filename)
-            df_batch.to_excel(writer, index=False)
-            writer.save()
-            #writer.close()
-            
-            return [html.Div(["Saved batch results to {}".format(output_filename)])]
-        except Exception as e:
-            return [html.Div(["Error saving batch results: {}".format(str(e))])]
     else:
-        # Handle single file mode save
-        if filename is None:
-            return [html.Div(["No file selected"])]
-            
+        # The file parameter is now the selected filename
+        file = filename
         global df, model, new_ngram
+
+        #   2023
+        #   Зміни в save
+        #   - вивід без new_ngram
+        #   - додаткові параметри
+
+        # Create a copy to avoid modifying the global df directly during calculations if needed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         df_copy = df.copy()
+
         df_copy = df_copy[df_copy.ngram != 'new_ngram']
+
+        # Recalculate rank if needed (ensure it's 0-based or 1-based consistently)
+        # If starting from 0:
+        # df_copy['rank'] = range(len(df_copy))
+        # If starting from 1 (like original):
         df_copy['rank'] = range(1, len(df_copy) + 1)
 
-        if len(df_copy) > 0:
+
+        if len(df_copy) > 0: # Ensure dataframe is not empty before calculating stats
             df_copy['w'] = (df_copy['F']) / (df_copy['F'].sum())
+
             R_avg = df_copy['R'].mean()
             dR = df_copy['R'].std()
             Rw_avg = (df_copy['R'] * df_copy['w']).sum()
             dRw = np.sqrt((((df_copy['R'] - Rw_avg) ** 2) * df_copy['w']).sum())
+
             gamma_avg = df_copy['gamma'].mean()
             dgamma = df_copy['gamma'].std()
             gammaw_avg = (df_copy['gamma'] * df_copy['w']).sum()
             dgammaw = np.sqrt((((df_copy['gamma'] - gammaw_avg) ** 2) * df_copy['w']).sum())
 
+            # Assign calculated values using .loc to avoid SettingWithCopyWarning
             df_copy.loc[:, 'R_avg'] = None
             df_copy.loc[df_copy.index[0], 'R_avg'] = R_avg
             df_copy.loc[:, 'dR'] = None
@@ -2507,6 +2548,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             df_copy.loc[df_copy.index[0], 'Rw_avg'] = Rw_avg
             df_copy.loc[:, 'dRw'] = None
             df_copy.loc[df_copy.index[0], 'dRw'] = dRw
+
             df_copy.loc[:, 'gamma_avg'] = None
             df_copy.loc[df_copy.index[0], 'gamma_avg'] = gamma_avg
             df_copy.loc[:, 'dgamma'] = None
@@ -2515,82 +2557,109 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             df_copy.loc[df_copy.index[0], 'gammaw_avg'] = gammaw_avg
             df_copy.loc[:, 'dgammaw'] = None
             df_copy.loc[df_copy.index[0], 'dgammaw'] = dgammaw
+
+            # Remove temporary 'w' column if not needed in the final output
             df_copy = df_copy.drop(columns=['w'])
 
+        else:
+             # Handle empty dataframe case if necessary
+             # Maybe return an alert or log a message
+             print("Warning: DataFrame is empty after filtering 'new_ngram'. Cannot save stats.")
+             # Decide how to handle df_copy columns if it's empty
+             pass
+
+
         if definition == "dynamic":
-            if save_path:
-                output_filename = f"{save_path}/{filename} condition={opt},fmin={fmin},n={n_size},w=({w_s},{w_s},{w_e},{w_max}),definition={definition},min_dist={min_dist_option},overlap={overlap_mode}.xlsx"
-            else:
-                output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
-                    filename, fmin, n_size, w_s, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
-            
-            os.makedirs(os.path.dirname(output_filename), exist_ok=True)
+            output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(file, fmin, n_size, w_s, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
+            # Changed to older pandas style without with context
+
+
+
+
+
             writer = pd.ExcelWriter(output_filename)
             df_copy.to_excel(writer, index=False)
             writer.save()
             #writer.close()
 
-            if active_cell and new_ngram:
+            if active_cell and new_ngram: # Check if new_ngram exists
+                # Existing logic for saving new_ngram data...
+                # NOTE: Ensure that 'active_cell' logic correctly identifies the row AFTER filtering 'new_ngram'
+                # This part might need review depending on whether active_cell refers to the original df or df_copy
+                # Assuming it refers to the state *before* this function modified df globally
+
+                # Handle potential errors if ids or active_cell['row'] are invalid for the *original* df
                 try:
-                    original_df = df
-                    current_ids = ids
+                    # Original logic used global df, let's assume we still need info based on the original selection state
+                    original_df = df # Reference the global df as it was upon entering the function
+                    current_ids = ids # Use the passed ids
+
+                    # Correct row index considering pagination
                     row_index = active_cell['row']
                     if page_current is not None and page_current > 0:
-                        row_index += page_current * 50
+                         row_index += page_current * 50 # Assuming page size is 50
 
+                    # Get the ngram based on the original selection state
+                    # Check if the selected index is valid in the *original* derived indices
                     if current_ids is not None and row_index < len(current_ids):
                         selected_original_index = current_ids[row_index]
+                        # Check if this index exists in the original df before filtering
                         if selected_original_index < len(original_df):
-                            ngram_to_save_details = original_df.iloc[selected_original_index]['ngram']
-                            if ngram_to_save_details != 'new_ngram':
-                                if save_path:
-                                    details_filename = f"{save_path}/{filename} {ngram_to_save_details}_details.xlsx"
-                                else:
-                                    details_filename = "saved_data/{} {}_details.xlsx".format(filename, ngram_to_save_details)
-                                
-                                writer_details = pd.ExcelWriter(details_filename)
-                                df1 = pd.DataFrame()
-                                if ngram_to_save_details in model:
-                                    df1["w"] = list(model[ngram_to_save_details].fa.keys())
-                                    df1['∆F'] = list(model[ngram_to_save_details].fa.values())
-                                    df1['fit=a*w^b'] = model[ngram_to_save_details].temp_fa
-                                    df1.to_excel(writer_details, index=False)
-                                    writer_details.save()
-                                    #writer_details.close()
-                                
-                                if new_ngram:
-                                    if save_path:
-                                        new_ngram_details_filename = f"{save_path}/{filename} new_ngram_dynamic_details.xlsx"
-                                    else:
-                                        new_ngram_details_filename = "saved_data/{} new_ngram_dynamic_details.xlsx".format(filename)
-                                    
-                                    writer_new_ngram = pd.ExcelWriter(new_ngram_details_filename)
-                                    df_new = pd.DataFrame()
-                                    df_new["w"] = list(new_ngram.dfa.keys())
-                                    df_new['∆F'] = list(new_ngram.dfa.values())
-                                    df_new['fit=a*w^b'] = new_ngram.temp_dfa
-                                    df_new.to_excel(writer_new_ngram, index=False)
-                                    writer_new_ngram.save()
-                                    #writer_new_ngram.close()
+                             ngram_to_save_details = original_df.iloc[selected_original_index]['ngram']
+
+                             # Ensure it's not the filtered 'new_ngram' (though unlikely if active_cell logic is sound)
+                             if ngram_to_save_details != 'new_ngram':
+
+                                 details_filename = "saved_data/{} {}_details.xlsx".format(file, ngram_to_save_details)
+                                 # Changed to older pandas style without with context
+                                 writer_details = pd.ExcelWriter(details_filename)
+                                 df1 = pd.DataFrame()
+                                 # Check if the ngram exists in the global model (might have been filtered)
+                                 if ngram_to_save_details in model:
+                                     df1["w"] = list(model[ngram_to_save_details].fa.keys())
+                                     df1['∆F'] = list(model[ngram_to_save_details].fa.values()) # Original code had '∆F', assuming this is correct?
+                                     df1['fit=a*w^b'] = model[ngram_to_save_details].temp_fa
+                                     df1.to_excel(writer_details, index=False)
+                                     writer_details.save()
+                                     #writer_details.close()
+                                 # Also save new_ngram specific data
+                                 if new_ngram: # Save new_ngram details if definition is dynamic
+                                     new_ngram_details_filename = "saved_data/{} new_ngram_dynamic_details.xlsx".format(file)
+                                     writer_new_ngram = pd.ExcelWriter(new_ngram_details_filename)
+                                     df_new = pd.DataFrame()
+                                     df_new["w"] = list(new_ngram.dfa.keys())
+                                     df_new['∆F'] = list(new_ngram.dfa.values()) # Original used ∆F here
+                                     df_new['fit=a*w^b'] = new_ngram.temp_dfa
+                                     df_new.to_excel(writer_new_ngram, index=False)
+                                     writer_new_ngram.save()
+
+                        else:
+                            print("Warning: Selected index {} out of bounds for original DataFrame.".format(selected_original_index))
+                    else:
+                        print("Warning: Calculated row index {} is invalid for derived indices.".format(row_index))
+
                 except Exception as e:
                     print("Error saving detailed ngram file (dynamic): {}".format(e))
+                    # Potentially add a Dash alert to inform the user
 
-            return [html.Div("Saved data to {}".format(output_filename))]
+
+            return [html.Div("Saved data to {}".format(output_filename))] # Provide feedback
 
         # Static definition part
-        if save_path:
-            output_filename_static = f"{save_path}/{filename} condition={opt},fmin={fmin},n={n_size},w=({w_s},{w_s},{w_e},{w_max}),definition={definition},min_dist={min_dist_option},overlap={overlap_mode}.xlsx"
-        else:
-            output_filename_static = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
-                filename, fmin, n_size, w_s, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
-        
-        os.makedirs(os.path.dirname(output_filename_static), exist_ok=True)
+        output_filename_static = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
+                file, fmin, n_size, w_s, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode
+            )
+        # Changed to older pandas style without with context 
+
+
+
         writer = pd.ExcelWriter(output_filename_static)
         df_copy.to_excel(writer, index=False)
         writer.save()
         #writer.close()
 
         if active_cell:
+            # Similar logic as above to get the correct ngram based on original selection state
             try:
                 original_df = df
                 current_ids = ids
@@ -2599,28 +2668,42 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                     row_index += page_current * 50
 
                 if current_ids is not None and row_index < len(current_ids):
-                    selected_original_index = current_ids[row_index]
-                    if selected_original_index < len(original_df):
+                     selected_original_index = current_ids[row_index]
+                     if selected_original_index < len(original_df):
                         ngram = original_df.iloc[selected_original_index]['ngram']
+
+                        # Ensure it's not 'new_ngram' (already filtered in df_copy, but check original selection)
                         if ngram != 'new_ngram':
+                            # Check if ngram exists in the model dictionary
                             if ngram in model:
-                                if save_path:
-                                    details_filename_static = f"{save_path}/{filename} {ngram}.xlsx"
-                                else:
-                                    details_filename_static = "saved_data/{} {}.xlsx".format(filename, ngram)
-                                
+                                details_filename_static = "saved_data/{} {}.xlsx".format(file, ngram)
+                                # Changed to older pandas style without with context
+
+
+
                                 writer_details = pd.ExcelWriter(details_filename_static)
                                 df1 = pd.DataFrame()
                                 df1["w"] = list(model[ngram].fa.keys())
-                                df1['∆F'] = list(model[ngram].fa.values())
+                                df1['∆F'] = list(model[ngram].fa.values()) # Original used ∆F here
                                 df1['fit=a*w^b'] = model[ngram].temp_fa
                                 df1.to_excel(writer_details, index=False)
                                 writer_details.save()
                                 #writer_details.close()
+                            else:
+                                print("Warning: Ngram '{}' selected but not found in model for detail saving.".format(ngram))
+                     else:
+                        print("Warning: Selected index {} out of bounds for original DataFrame (static).".format(selected_original_index))
+                else:
+                    print("Warning: Calculated row index {} is invalid for derived indices (static).".format(row_index))
+
             except Exception as e:
                 print("Error saving detailed ngram file (static): {}".format(e))
+                # Potentially add a Dash alert
 
-    return [html.Div("Saved data.")]
+    # Use the modified df_copy for saving, keep global df potentially unchanged if needed elsewhere
+    # Or update global df if necessary: df = df_copy
+    # For now, just provide feedback
+    return [html.Div("Saved data.")] # Generic feedback if filename isn't always generated
 
 
 # import webbrowser # Commented out as it might cause issues if run non-interactively

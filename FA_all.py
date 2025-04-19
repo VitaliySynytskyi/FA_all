@@ -797,6 +797,7 @@ layout1 = html.Div([
                                                 multiple=True
                                             ),
                                             html.Div(id='upload-status'),
+                                            html.Div(id='min-max-length-info', style={"marginTop": "5px", "fontSize": "small"}), # Added Div for min/max info
                                             # Add dropdown for selecting files
                                             dbc.InputGroup(
                                                 [
@@ -1356,40 +1357,44 @@ length_updated = False
 
 @app.callback(
     [Output('upload-status', 'children'),
-     Output('file-selector', 'options')],
+     Output('file-selector', 'options'),
+     Output('min-max-length-info', 'children')], # Added new output
     [Input('upload-data', 'contents')],
     [State('upload-data', 'filename'),
-     State('n_size', 'value')]
+     State('n_size', 'value'),
+     State('split', 'value')] # Added split state
 )
-def update_upload_status(contents, filenames, n_size):
+def update_upload_status(contents, filenames, n_size, split_mode):
     global uploaded_files, file_lengths
     
-    if contents is None:
-        # Return current options for file selector
-        options = [{'label': filename, 'value': filename, 'title': filename} for filename in list(uploaded_files.keys())]
-        return html.Div(["No new files uploaded"]), options
+    min_max_info = ""
+    options = [{'label': filename, 'value': filename, 'title': filename} for filename in list(uploaded_files.keys())]
     
-    # Counters for summary
+    if contents is None:
+        # Calculate min/max even if no new files are uploaded, but existing ones are present
+        if file_lengths and split_mode:
+            lengths = [file_lengths[filename].get(split_mode, 0) for filename in file_lengths]
+            if lengths:
+                min_len = min(lengths)
+                max_len = max(lengths)
+                split_label = "letters&numbers" if split_mode == 'letter' else f"{split_mode}s"
+                min_max_info = f"Min/Max Length ({split_label}): {min_len} / {max_len}"
+        return html.Div(["No new files uploaded"]), options, html.Div(min_max_info)
+    
     success_count = 0
     error_count = 0
     
-    # Process each uploaded file
     for i, (content, filename) in enumerate(zip(contents, filenames)):
         try:
-            # Parse the uploaded file
             content_type, content_string = content.split(',')
             decoded = base64.b64decode(content_string)
             
-            # Store the decoded content
             try:
-                # Try reading as string
                 file_content = decoded.decode('utf-8')
                 uploaded_files[filename] = file_content
-                
-                # Initialize length dictionary for this file
                 file_lengths[filename] = {}
                 
-                # Calculate and store word length
+                # Word length
                 text_word = re.sub(r'\n+', '\n', file_content)
                 text_word = re.sub(r'\n\s\s', '\n', text_word)
                 text_word = re.sub(r'﻿', '', text_word)
@@ -1399,7 +1404,7 @@ def update_upload_status(contents, filenames, n_size):
                 words = processor.get_words()
                 file_lengths[filename]['word'] = len(words)
                 
-                # Calculate and store symbol length
+                # Symbol length
                 symbols = []
                 for char in file_content:
                     if char == " " or char == "\n" or char == "\ufeff":
@@ -1408,7 +1413,7 @@ def update_upload_status(contents, filenames, n_size):
                         symbols.append(char.lower())
                 file_lengths[filename]['symbol'] = len(symbols)
                 
-                # Calculate and store letter length
+                # Letter length
                 text_letter = remove_punctuation(file_content)
                 letters = []
                 for word in text_letter:
@@ -1418,7 +1423,6 @@ def update_upload_status(contents, filenames, n_size):
                         letters.append(i)
                 file_lengths[filename]['letter'] = len(letters)
                 
-                # Print detailed info to console instead of adding to upload_status
                 print(f"✓ Uploaded: {filename}")
                 print(f"  Words: {file_lengths[filename]['word']} | Symbols: {file_lengths[filename]['symbol']} | Letters: {file_lengths[filename]['letter']}")
                 
@@ -1430,17 +1434,24 @@ def update_upload_status(contents, filenames, n_size):
             print(f"✗ Error processing {filename}: {str(e)}")
             error_count += 1
     
-    # Create summary message for display
     summary_message = html.Div([
         html.H5(f"Upload Summary:"),
         html.P(f"Successfully uploaded: {success_count} file(s)", style={'color': 'green'}),
         html.P(f"Files with errors: {error_count}", style={'color': 'red' if error_count > 0 else 'green'})
     ])
     
-    # Create options for file selector dropdown, adding title attribute for tooltip
     options = [{'label': filename, 'value': filename, 'title': filename} for filename in list(uploaded_files.keys())]
+
+    # Calculate Min/Max length based on the current split mode
+    if file_lengths and split_mode:
+        lengths = [file_lengths[filename].get(split_mode, 0) for filename in file_lengths]
+        if lengths:
+            min_len = min(lengths)
+            max_len = max(lengths)
+            split_label = "letters&numbers" if split_mode == 'letter' else f"{split_mode}s"
+            min_max_info = f"Min/Max Length ({split_label}): {min_len} / {max_len}"
     
-    return summary_message, options
+    return summary_message, options, html.Div(min_max_info)
 
 
 # Add callback to handle file selection
@@ -1461,19 +1472,18 @@ def process_selected_file(selected_filename, split, definition, n):
     if selected_filename is None or selected_filename not in uploaded_files:
         return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
     
-    # Get the file content
     file = uploaded_files[selected_filename]
-    
     length_updated = False
     
+    # Calculate L based on split type (dynamic or static handles data differently)
     if definition == "dynamic":
         data = prepare_data(file, n, split)
         L = len(data)
         w_max = int(L / 10)
         w_min = int(w_max / 10)
     else:
+        # Static mode calculation based on selected split
         if split == "letter":
-            # Обробка для літер і чисел
             temp = []
             data = remove_punctuation(file)
             for word in data:
@@ -1484,7 +1494,6 @@ def process_selected_file(selected_filename, split, definition, n):
             data = temp
             L = len(data)
         elif split == "symbol":
-            # Обробка для символів
             temp = []
             for char in file:
                 if char == " " or char == "\n" or char == "\ufeff":
@@ -1494,17 +1503,12 @@ def process_selected_file(selected_filename, split, definition, n):
             data = temp
             L = len(data)
         elif split == "word":
-            # Обробка для слів
             file = re.sub(r'\n+', '\n', file)
             file = re.sub(r'\n\s\s', '\n', file)
             file = re.sub(r'﻿', '', file)
             file = re.sub(r'--', ' -', file)
-
             processor = NgrammProcessor()
-            # обробка тексту
             processor.preprocess(file)
-
-            # Отримання слів у тексті
             data = processor.get_words()
             L = len(data)
 
@@ -1512,14 +1516,21 @@ def process_selected_file(selected_filename, split, definition, n):
         w_min = int(w_max / 20)
         length_updated = True
     
-    # Show all three lengths for the selected file
-    lengths_str = "Length: {} ({}s) | ".format(L, split)
-    for split_type in ['word', 'symbol', 'letter']:
-        if split_type != split:
-            lengths_str += "{}s: {} | ".format(split_type, file_lengths[selected_filename][split_type])
-    lengths_str = lengths_str.rstrip(" | ")
+    # Format the lengths into a multi-line Div
+    length_elements = [html.Strong("Length:")]
     
-    return [lengths_str], w_min, w_min, w_min, w_max
+    # Get all lengths from the stored dictionary
+    lengths = file_lengths[selected_filename]
+    
+    # Add each length type on a new line
+    if 'word' in lengths:
+        length_elements.append(html.Div(f"words: {lengths['word']}"))
+    if 'symbol' in lengths:
+        length_elements.append(html.Div(f"symbols: {lengths['symbol']}"))
+    if 'letter' in lengths:
+        length_elements.append(html.Div(f"letters&numbers: {lengths['letter']}"))
+        
+    return length_elements, w_min, w_min, w_min, w_max
 
 
 def remove_empty_strings(arr: List[str]) -> List[str]:

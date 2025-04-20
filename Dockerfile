@@ -21,7 +21,8 @@ RUN pip install --no-cache-dir \
     networkx==2.5.1 \
     scikit-learn==0.24.2 \
     openpyxl==3.0.7 \
-    matplotlib==3.3.4
+    matplotlib==3.3.4 \
+    regex
 
 # Копіювання файлів
 COPY . /app/

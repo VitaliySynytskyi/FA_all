@@ -798,7 +798,6 @@ layout1 = html.Div([
                                                 multiple=True
                                             ),
                                             html.Div(id='upload-status'),
-                                            html.Div(id='min-max-length-info', style={"marginTop": "5px", "fontSize": "small"}), # Added Div for min/max info
                                             # Add dropdown for selecting files
                                             dbc.InputGroup(
                                                 [
@@ -980,7 +979,8 @@ layout1 = html.Div([
                                     html.H6("Batch Processing", 
                                            className="text-primary text-center mb-2", 
                                            style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
-                                    
+                                    # Add the min-max info Div here
+                                    html.Div(id='min-max-length-info', style={"marginTop": "5px", "fontSize": "small", "textAlign": "center", "marginBottom": "10px"}),
                                     dbc.InputGroup(
                                         [
                                             dbc.InputGroupText("Lmin: Fmin1"),

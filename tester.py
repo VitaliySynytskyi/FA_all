@@ -686,8 +686,7 @@ layout1 = html.Div([
                                             ),
                                         ]),
                                 ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
-                                # Додайте цей код десь у layout1, наприклад після блоку вибору файлу
-html.Div(id="file-type-info", children="", style={"display": "none", "margin": "10px 0", "padding": "5px", "background-color": "#f8f9fa", "borderRadius": "5px"}),
+                                
                                 # ANALYSIS PARAMETERS SECTION
                                 html.Div([
                                     html.H6("Analysis Parameters", 
@@ -1172,10 +1171,7 @@ html.Div(id="file-type-info", children="", style={"display": "none", "margin": "
 ])
 from dash.dependencies import Input, Output, State
 
-app.layout = html.Div([
-    layout1,
-    text_type_modal
-])
+app.layout = layout1
 df = None
 g = None
 import plotly.express as px
@@ -1312,7 +1308,19 @@ def update_upload_status(contents, filenames, n_size):
      Output('wm', 'value')],
     [Input('file-selector', 'value'),
      Input('split', 'value'),
-     Input('file-language-store', 'data')],  # Використовувати file-language-store, а не file-language
+     Input('file-language', 'data')],
+    [State('def', 'value'),
+     State('n_size', 'value')]
+)
+@app.callback(
+    [Output('l', 'children'),
+     Output('w', 'value'),
+     Output('wh', 'value'),
+     Output('we', 'value'),
+     Output('wm', 'value')],
+    [Input('file-selector', 'value'),
+     Input('split', 'value'),
+     Input('file-language-store', 'data')],
     [State('def', 'value'),
      State('n_size', 'value')]
 )
@@ -1812,9 +1820,7 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
                State("overlap_mode", "value"),
                State("n_size", "value"),
                State("split", "value"),
-               State("condition", "value"),
-               State("file-language-store", "data"),  # Додайте ці рядки
-               State("file-selector", "value")
+               State("condition", "value")
                ])
 def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option, 
                  overlap_mode, n_size, split, condition, file_info, selected_filename):
@@ -2097,7 +2103,7 @@ text_type_modal = dbc.Modal(
 
 @app.callback(
     [Output('text-type-modal', 'is_open'),
-     Output('file-language-store', 'data')],
+     Output('file-language', 'data')],
     [Input('file-selector', 'value'),
      Input('text-type-confirm', 'n_clicks')],
     [State('text-type-selector', 'value'),

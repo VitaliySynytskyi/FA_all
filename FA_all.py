@@ -36,6 +36,10 @@ from concurrent.futures import ThreadPoolExecutor
 import numba
 import os
 
+# tkinter for selecting browsing folder
+import tkinter as tk
+from tkinter import filedialog
+
 # Функція для очищення пам'яті
 def clear_memory(keep: List[str] = []):
     """
@@ -1961,6 +1965,9 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
         return html.Div(["No batch results to save"])
     
     try:
+        save_folder = pick_folder()
+        if save_folder is None or save_folder == "":
+            return dash.no_update
         # Create DataFrame from batch results
         df_batch = pd.DataFrame(batch_results)
         
@@ -1969,11 +1976,11 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
         column_mapping = {}
         
         # Create filename with parameters
-        output_filename = "saved_data/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={},window_mode={}.xlsx".format(
-            n_size, split, condition, definition, min_dist_option, overlap_mode, batch_window_mode)
+        output_filename = "{}/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={},window_mode={}.xlsx".format(
+            save_folder, n_size, split, condition, definition, min_dist_option, overlap_mode, batch_window_mode)
         
         # Ensure directory exists
-        os.makedirs("saved_data", exist_ok=True)
+        os.makedirs(save_folder, exist_ok=True)
         
         # Save to Excel - modify to use older pandas style
         writer = pd.ExcelWriter(output_filename)
@@ -2482,6 +2489,9 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
         return [html.Div(["No file selected to save"])]
     
     try:
+        save_folder = pick_folder()
+        if save_folder is None or save_folder == "":
+            return dash.no_update
         file = filename
         global df, model, new_ngram
 
@@ -2490,11 +2500,11 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             # Create DataFrame with the new_ngram row
             df_to_save = df.copy()  # This will include the new_ngram row
             
-            output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
-                file, fmin, n_size, w_min, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
+            output_filename = "{11}/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
+                file, fmin, n_size, w_min, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode, save_folder)
             
             # Ensure save directory exists
-            os.makedirs("saved_data", exist_ok=True)
+            os.makedirs(save_folder, exist_ok=True)
             
             # Save the main file with new_ngram data
             writer = pd.ExcelWriter(output_filename)
@@ -2503,7 +2513,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
 
             # If new_ngram exists and we have its details, save them too
             if new_ngram and hasattr(new_ngram, 'dfa'):
-                details_filename = "saved_data/{} new_ngram_details.xlsx".format(file)
+                details_filename = "{}/{} new_ngram_details.xlsx".format(save_folder, file)
                 writer_details = pd.ExcelWriter(details_filename)
                 df_details = pd.DataFrame()
                 df_details["w"] = list(new_ngram.dfa.keys())
@@ -2557,10 +2567,10 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
 
                 df_copy = df_copy.drop(columns=['w'])
 
-            output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
-                file, fmin, n_size, w_min, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
+            output_filename = "{11}/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
+                file, fmin, n_size, w_min, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode, save_folder)
             
-            os.makedirs("saved_data", exist_ok=True)
+            os.makedirs(save_folder, exist_ok=True)
             
             writer = pd.ExcelWriter(output_filename)
             df_copy.to_excel(writer, index=False)
@@ -2577,7 +2587,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                         if selected_index < len(df):
                             ngram = df.iloc[selected_index]['ngram']
                             if ngram != 'new_ngram' and ngram in model:
-                                details_filename = "saved_data/{} {}_details.xlsx".format(file, ngram)
+                                details_filename = "{}/{} {}_details.xlsx".format(save_folder, file, ngram)
                                 writer_details = pd.ExcelWriter(details_filename)
                                 df1 = pd.DataFrame()
                                 df1["w"] = list(model[ngram].fa.keys())
@@ -2597,6 +2607,19 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             
     except Exception as e:
         return [html.Div(["Error saving data: {}".format(str(e))])]
+
+
+def pick_folder():
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    folder_selected = filedialog.askdirectory()
+    root.destroy() 
+
+    if folder_selected:
+        return folder_selected
+    else:
+        return None
 
 
 # import webbrowser # Commented out as it might cause issues if run non-interactively

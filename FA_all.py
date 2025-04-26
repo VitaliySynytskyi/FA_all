@@ -770,6 +770,40 @@ layout1 = html.Div([
                         dbc.CardHeader("Configuration:", style={"background-color": "#e9f5fe", "fontWeight": "bold"}),
                         dbc.CardBody(
                             [
+
+
+                                # FILE SECTION
+                                html.Div([
+                                    html.H6("Text Type Selection", 
+                                           className="text-primary text-center mb-2", 
+                                           style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
+                                
+                                    html.Label("Choose Text Type:"),
+                                    html.Div(
+                                        [
+                                            dbc.InputGroup(
+                                            [
+                                                html.Div(
+                                                    dbc.RadioItems(
+                                                        options=[
+                                                            {"label": "Natural text", "value": False},
+                                                            {"label": "PC text (Computer code)", "value": True}
+                                                        ],
+                                                        value=False,
+                                                        id="isComputerText",
+                                                        inline=True
+                                                    ),
+                                                    style={"marginLeft": "10px"} 
+                                                ),
+                                            ]
+                                        ),
+                                ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
+                                ]),
+
+
+
+
+
                                 # FILE SECTION
                                 html.Div([
                                     html.H6("File Selection", 

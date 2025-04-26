@@ -770,8 +770,6 @@ layout1 = html.Div([
                         dbc.CardHeader("Configuration:", style={"background-color": "#e9f5fe", "fontWeight": "bold"}),
                         dbc.CardBody(
                             [
-
-
                                 # FILE SECTION
                                 html.Div([
                                     html.H6("Text Type Selection", 
@@ -799,10 +797,6 @@ layout1 = html.Div([
                                         ),
                                 ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
                                 ]),
-
-
-
-
 
                                 # FILE SECTION
                                 html.Div([

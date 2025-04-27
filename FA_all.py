@@ -40,6 +40,12 @@ import os
 import tkinter as tk
 from tkinter import filedialog
 
+# lexers to process computer code texts
+from pygments.lexers import TextLexer
+from pygments import lex
+from pygments.lexers import guess_lexer_for_filename, get_lexer_by_name
+from pygments.token import Token
+
 # Функція для очищення пам'яті
 def clear_memory(keep: List[str] = []):
     """
@@ -145,7 +151,7 @@ def remove_punctuation(data):
 toast_visible = False
 error_visible = False
 analyze_visible = False
-
+isComputerText = False
 class Ngram(dict):
     def __init__(self, iterable=None):  # Ініціалізували наш розподіл як новий об'єкт класу, додаємо наявні елементи
         super(Ngram, self).__init__()
@@ -505,6 +511,7 @@ def make_windows(x: np.ndarray, wi: int, l: int, wsh: int,
     Returns:
         np.ndarray: Масив сум у вікнах
     """
+    print(1331111111111)
     # Використовуємо Numba для оптимізації
     if overlap_mode == "overlapping":
         # Визначаємо кількість вікон заздалегідь для уникнення повторного обчислення
@@ -552,7 +559,7 @@ def fit(x, a, b):
 
 
 @memoize
-def prepare_data(data: str, n: int, split: str) -> List:
+def prepare_data(data: str, n: int, split: str, filename: str) -> List:
     """
     Підготовка даних для аналізу, розбиття на n-грами залежно від вказаних параметрів.
     
@@ -576,11 +583,23 @@ def prepare_data(data: str, n: int, split: str) -> List:
     # Для n=1 (одиничні елементи)
     if n == 1:
         if split == "word":
-            # Обробка тексту для слів
-            data = re.sub(r'--', ' -', data)
-            processor = NgrammProcessor()
-            processor.preprocess(data)
-            result = processor.get_words()
+            if isComputerText:
+                lexer = guess_lexer_or_text(data, filename)
+                if not isinstance(lexer, TextLexer): 
+                    result = tokenize_code(data, lexer)
+                else:
+                    print(f"could not guess language of file {filename}")
+                    data = re.sub(r'--', ' -', data)
+                    processor = NgrammProcessor()
+                    processor.preprocess(data)
+                    result = processor.get_words()
+            else:
+                # Обробка тексту для слів
+                data = re.sub(r'--', ' -', data)
+                processor = NgrammProcessor()
+                processor.preprocess(data)
+                result = processor.get_words()
+ 
             L = len(result)
             return result
             
@@ -610,11 +629,24 @@ def prepare_data(data: str, n: int, split: str) -> List:
     # Для n>1 (n-грами)
     else:
         if split == "word":
+            if isComputerText:
+                lexer = guess_lexer_or_text(data, filename)
+                if not isinstance(lexer, TextLexer): 
+                    words = tokenize_code(data, lexer)
+                else:
+                    print(f"could not guess language of file {filename}")
+                    data = re.sub(r'--', ' -', data)
+                    processor = NgrammProcessor()
+                    processor.preprocess(data)
+                    words = processor.get_words()
+            else:
+                # Обробка тексту для слів
+                data = re.sub(r'--', ' -', data)
+                processor = NgrammProcessor()
+                processor.preprocess(data)
+                words = processor.get_words()
+            
             # Обробка для n-грам слів
-            data = re.sub(r'--', ' -', data)
-            processor = NgrammProcessor()
-            processor.preprocess(data)
-            words = processor.get_words()
             L = len(words)
             
             # Створюємо n-грами з слів
@@ -788,13 +820,14 @@ layout1 = html.Div([
                                                             {"label": "PC text (Computer code)", "value": True}
                                                         ],
                                                         value=False,
-                                                        id="isComputerText",
+                                                        id="computerTextRadio",
                                                         inline=True
                                                     ),
                                                     style={"marginLeft": "10px"} 
                                                 ),
                                             ]
                                         ),
+                                        html.Div(id='isComputerTextOutput', style={'display': 'none'})
                                 ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
                                 ]),
 
@@ -1500,7 +1533,8 @@ def update_upload_status(contents, filenames, n_size, split_mode):
      State('n_size', 'value')]
 )
 def process_selected_file(selected_filename, split, definition, n):
-    global L, data, length_updated
+    print(2222222222222222)
+    global L, data, length_updated, isComputerText
     
     if selected_filename is None or selected_filename not in uploaded_files:
         return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
@@ -1510,7 +1544,7 @@ def process_selected_file(selected_filename, split, definition, n):
     
     # Calculate L based on split type (dynamic or static handles data differently)
     if definition == "dynamic":
-        data = prepare_data(file, n, split)
+        data = prepare_data(file, n, split, selected_filename)
         L = len(data)
         w_max = int(L / 10)
         w_min = int(w_max / 10)
@@ -1536,13 +1570,27 @@ def process_selected_file(selected_filename, split, definition, n):
             data = temp
             L = len(data)
         elif split == "word":
-            file = re.sub(r'\n+', '\n', file)
-            file = re.sub(r'\n\s\s', '\n', file)
-            file = re.sub(r'﻿', '', file)
-            file = re.sub(r'--', ' -', file)
-            processor = NgrammProcessor()
-            processor.preprocess(file)
-            data = processor.get_words()
+            if isComputerText:
+                lexer = guess_lexer_or_text(file, selected_filename)
+                if not isinstance(lexer, TextLexer): 
+                    data = tokenize_code(file, lexer)
+                else:
+                    print(f"could not guess language of file {selected_filename}")
+                    file = re.sub(r'\n+', '\n', file)
+                    file = re.sub(r'\n\s\s', '\n', file)
+                    file = re.sub(r'﻿', '', file)
+                    file = re.sub(r'--', ' -', file)
+                    processor = NgrammProcessor()
+                    processor.preprocess(file)
+                    data = processor.get_words()
+            else:
+                file = re.sub(r'\n+', '\n', file)
+                file = re.sub(r'\n\s\s', '\n', file)
+                file = re.sub(r'﻿', '', file)
+                file = re.sub(r'--', ' -', file)
+                processor = NgrammProcessor()
+                processor.preprocess(file)
+                data = processor.get_words()
             L = len(data)
 
         w_max = int(L / 20)
@@ -1602,7 +1650,7 @@ new_ngram = None
 )
 def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definition, min_dist_option, 
                       overlap_mode, w_min, w_s, w_e, w_max, batch_window_mode):
-    global batch_results, uploaded_files, file_lengths
+    global batch_results, uploaded_files, file_lengths, isComputerText
     
     if n_clicks is None or not uploaded_files:
         return [], {"display": "none"}
@@ -1642,7 +1690,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         
         # Process data based on definition mode
         if definition == "dynamic":
-            data = prepare_data(file_content, n_size, split)
+            data = prepare_data(file_content, n_size, split, filename)
         else:
             if split == "letter":
                 file_text = re.sub(r'	', '', file_content)
@@ -1684,16 +1732,33 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
                 del clean_text
                 gc.collect()
             elif split == "word":
-                file_text = re.sub(r'\n+', '\n', file_content)
-                file_text = re.sub(r'\n\s\s', '\n', file_text)
-                file_text = re.sub(r'﻿', '', file_text)
-                file_text = re.sub(r'--', ' -', file_text)
-                processor = NgrammProcessor()
-                processor.preprocess(file_text)
-                data = processor.get_words()
-                del processor
-                del file_text
-                gc.collect()
+                if isComputerText:
+                    lexer = guess_lexer_or_text(file_content, filename)
+                    if not isinstance(lexer, TextLexer): 
+                        data = tokenize_code(file_content, lexer)
+                    else:
+                        print(f"could not guess language of file {filename}")
+                        file_text = re.sub(r'\n+', '\n', file_content)
+                        file_text = re.sub(r'\n\s\s', '\n', file_text)
+                        file_text = re.sub(r'﻿', '', file_text)
+                        file_text = re.sub(r'--', ' -', file_text)
+                        processor = NgrammProcessor()
+                        processor.preprocess(file_text)
+                        data = processor.get_words()
+                        del processor
+                        del file_text
+                        gc.collect()
+                else:
+                    file_text = re.sub(r'\n+', '\n', file_content)
+                    file_text = re.sub(r'\n\s\s', '\n', file_text)
+                    file_text = re.sub(r'﻿', '', file_text)
+                    file_text = re.sub(r'--', ' -', file_text)
+                    processor = NgrammProcessor()
+                    processor.preprocess(file_text)
+                    data = processor.get_words()
+                    del processor
+                    del file_text
+                    gc.collect()
 
         L = len(data)
         
@@ -2649,6 +2714,31 @@ def pick_folder():
     else:
         return None
 
+@app.callback(
+    Output('isComputerTextOutput', 'children'),
+    Input('computerTextRadio', 'value')
+)
+def update_isComputerText(selected_value):
+    global isComputerText
+    isComputerText = selected_value
+    return ""
+
+def guess_lexer_or_text(code, file_path):
+    try:
+        lexer = guess_lexer_for_filename(file_path, code)
+    except Exception:
+        lexer = get_lexer_by_name("text")
+    print("lexer",lexer)
+    return lexer
+
+def tokenize_code(code, lexer):
+    tokens = lex(code, lexer)
+    token_list = []
+
+    for token_type, token_value in tokens:
+        print(token_value)
+        token_list.append(token_value)
+    return token_list
 
 # import webbrowser # Commented out as it might cause issues if run non-interactively
 

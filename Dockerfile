@@ -26,7 +26,8 @@ RUN pip install --no-cache-dir \
     networkx==2.5.1 \
     scikit-learn==0.24.2 \
     openpyxl==3.0.7 \
-    matplotlib==3.3.4
+    matplotlib==3.3.4 \
+    pygments==2.9.0
 
 # Встановлюємо numba окремо, після всіх інших пакетів
 RUN pip install --no-cache-dir numba==0.53.1

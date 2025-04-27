@@ -19,43 +19,132 @@ import re
 import base64
 import io
 import webbrowser
+from pygments import lex
+from pygments.lexers import get_lexer_by_name, get_lexer_for_filename, guess_lexer
+from pygments.token import Token
 
 
-def get_language_keywords(language):
-    """Повертає ключові слова для заданої мови програмування"""
-    keywords = {
-        'python': {
-            'keywords': ['def', 'class', 'if', 'else', 'elif', 'for', 'while', 'try', 'except', 
-                         'finally', 'with', 'as', 'import', 'from', 'return', 'yield', 'break', 
-                         'continue', 'pass', 'assert', 'raise', 'global', 'nonlocal', 'lambda', 
-                         'True', 'False', 'None', 'and', 'or', 'not', 'is', 'in'],
-            'operators': ['+', '-', '*', '/', '%', '**', '//', '=', '==', '!=', '>', '<', '>=', 
-                          '<=', 'and', 'or', 'not', '&', '|', '^', '~', '<<', '>>'],
-            'delimiters': ['(', ')', '[', ']', '{', '}', ',', '.', ':', ';', '@', '=', '+=', 
-                           '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=', '**=', '//=']
-        },
-        'cpp': {
-            'keywords': ['auto', 'break', 'case', 'char', 'const', 'continue', 'default', 'do', 
-                         'double', 'else', 'enum', 'extern', 'float', 'for', 'goto', 'if', 
-                         'inline', 'int', 'long', 'register', 'restrict', 'return', 'short', 
-                         'signed', 'sizeof', 'static', 'struct', 'switch', 'typedef', 'union', 
-                         'unsigned', 'void', 'volatile', 'while', 'bool', 'class', 'catch', 
-                         'delete', 'new', 'operator', 'private', 'protected', 'public', 'template', 
-                         'this', 'throw', 'try', 'virtual'],
-            'operators': ['+', '-', '*', '/', '%', '=', '==', '!=', '>', '<', '>=', '<=', '&&', 
-                         '||', '!', '&', '|', '^', '~', '<<', '>>'],
-            'delimiters': ['(', ')', '[', ']', '{', '}', ',', '.', ':', ';', '#', '?', '::', '->']
-        },
-        # Аналогічно для інших мов...
-        'unknown': {
-            'keywords': [],
-            'operators': ['+', '-', '*', '/', '%', '=', '>', '<'],
-            'delimiters': ['(', ')', '[', ']', '{', '}', ',', '.', ':', ';']
-        }
-    }
+
+def tokenize_code_with_pygments(code_content, language=None, filename=None):
+    """
+    Токенізує код за допомогою Pygments, зберігаючи всі елементи коду та коментарі.
     
-    return keywords.get(language, keywords['unknown'])
+    Args:
+        code_content (str): Вміст коду для токенізації
+        language (str, optional): Мова програмування
+        filename (str, optional): Ім'я файлу для визначення мови за розширенням
+        
+    Returns:
+        tuple: (code_tokens, comment_tokens) - токени коду та токени коментарів
+    """
+    # Отримання відповідного лексера
+    try:
+        if language and language != 'unknown':
+            lexer = get_lexer_by_name(language)
+        elif filename:
+            lexer = get_lexer_for_filename(filename)
+        else:
+            # Якщо не вдалося визначити мову, спробуємо вгадати
+            lexer = guess_lexer(code_content)
+    except Exception as e:
+        print(f"Не вдалося отримати лексер: {e}")
+        # Використовуємо простий текстовий лексер як запасний варіант
+        lexer = get_lexer_by_name("text")
+    
+    # Токенізація
+    code_tokens = []
+    comment_tokens = []
+    
+    for token_type, token_value in lex(code_content, lexer):
+        # Перетворюємо багаторядковий текст в окремі рядки
+        token_value = token_value.replace('\r\n', '\n')
+        lines = token_value.split('\n')
+        
+        for i, line in enumerate(lines):
+            if not line.strip():  # Пропускаємо порожні рядки
+                continue
+                
+            # Визначаємо, чи це коментар
+            if token_type in Token.Comment:
+                # Обробляємо коментар як природний текст
+                # Прибираємо символи початку коментарів
+                clean_comment = re.sub(r'^[/#*]+\s*', '', line).strip()
+                if clean_comment:  # Якщо є текст після символів коментаря
+                    # Розбиваємо на слова
+                    words = re.findall(r'\b\w+\b', clean_comment)
+                    comment_tokens.extend(words)
+            else:
+                # Додаємо нетривіальні токени коду
+                if line.strip():
+                    code_tokens.append((token_type, line.strip()))
+    
+    return code_tokens, comment_tokens
 
+def get_all_code_elements(code_tokens):
+    """
+    Витягує всі елементи коду з токенів, включаючи ключові слова, оператори, ідентифікатори тощо.
+    
+    Args:
+        code_tokens (list): Список кортежів (тип_токена, значення_токена)
+        
+    Returns:
+        list: Список всіх елементів коду
+    """
+    all_elements = []
+    
+    for token_type, token_value in code_tokens:
+        # Різні типи токенів обробляються по-різному
+        if token_type in Token.Keyword:
+            # Ключові слова зберігаємо як є
+            all_elements.append(token_value)
+        elif token_type in Token.Operator:
+            # Оператори зберігаємо як є
+            all_elements.append(token_value)
+        elif token_type in Token.Name:
+            # Імена (ідентифікатори, функції тощо)
+            all_elements.append(token_value)
+        elif token_type in Token.Literal.String:
+            # Рядки
+            all_elements.append(token_value)
+        elif token_type in Token.Literal.Number:
+            # Числа
+            all_elements.append(token_value)
+        elif token_type in Token.Punctuation:
+            # Пунктуація (дужки, коми тощо)
+            all_elements.append(token_value)
+        else:
+            # Інші типи токенів
+            if token_value.strip():
+                all_elements.append(token_value)
+    
+    return all_elements
+
+def process_code_improved(file_content, language=None, filename=None, include_comments=True):
+    """
+    Покращена функція обробки коду, яка використовує Pygments для токенізації.
+    
+    Args:
+        file_content (str): Вміст файлу з кодом
+        language (str, optional): Мова програмування
+        filename (str, optional): Ім'я файлу для визначення мови
+        include_comments (bool): Чи включати коментарі в аналіз
+        
+    Returns:
+        tuple: (code_elements, comment_elements, all_elements)
+    """
+    # Токенізуємо код
+    code_tokens, comment_tokens = tokenize_code_with_pygments(file_content, language, filename)
+    
+    # Отримуємо всі елементи коду
+    code_elements = get_all_code_elements(code_tokens)
+    
+    # Якщо включати коментарі
+    if include_comments:
+        all_elements = code_elements + comment_tokens
+    else:
+        all_elements = code_elements
+    
+    return code_elements, comment_tokens, all_elements
 
 def detect_programming_language(filename):
     """Визначає мову програмування за розширенням файлу"""
@@ -80,51 +169,26 @@ def detect_programming_language(filename):
         'sql': 'sql'
     }
     
-    return language_extensions.get(extension, 'unknown')
+    return language_extensions.get(extension, 'text')
 
-def process_code(file_content, language):
-    """Обробляє програмний код, виділяючи ключові слова, оператори та розділювачі"""
-    language_info = get_language_keywords(language)
+def process_code(file_content, language, include_comments=True, filename=None):
+    """Обробляє програмний код, виділяючи всі елементи включно з коментарями"""
+    # Використовуємо нову функцію для обробки коду
+    code_elements, comment_elements, all_elements = process_code_improved(
+        file_content, language, filename, include_comments
+    )
     
-    # Видалення коментарів (це спрощений приклад, для різних мов потрібні різні підходи)
-    if language == 'python':
-        # Видалення однорядкових коментарів
-        file_content = re.sub(r'#.*$', '', file_content, flags=re.MULTILINE)
-        # Видалення багаторядкових коментарів
-        file_content = re.sub(r'""".*?"""', '', file_content, flags=re.DOTALL)
-        file_content = re.sub(r"'''.*?'''", '', file_content, flags=re.DOTALL)
-    elif language in ['cpp', 'java', 'csharp', 'javascript']:
-        # Видалення однорядкових коментарів
-        file_content = re.sub(r'//.*$', '', file_content, flags=re.MULTILINE)
-        # Видалення багаторядкових коментарів
-        file_content = re.sub(r'/\*.*?\*/', '', file_content, flags=re.DOTALL)
+    # Вивід для відлагодження
+    print("Приклади токенів:", all_elements[:20])
+    print("Загальна кількість токенів:", len(all_elements))
     
-    # Токенізація
-    tokens = []
+    # Підрахунок пунктуації
+    punctuation = [t for t in all_elements if t in ".,(){}[]<>;:'\"!?+-*/="]
+    print("Кількість токенів пунктуації:", len(punctuation))
+    print("Приклади пунктуації:", punctuation[:20])
     
-    # Розбиваємо на токени (спрощений підхід)
-    # Для справжньої токенізації коду краще використовувати спеціалізовані парсери
-    words = re.findall(r'\b\w+\b|[^\w\s]', file_content)
-    
-    for word in words:
-        if word in language_info['keywords']:
-            tokens.append(('keyword', word))
-        elif word in language_info['operators']:
-            tokens.append(('operator', word))
-        elif word in language_info['delimiters']:
-            tokens.append(('delimiter', word))
-        elif re.match(r'^[0-9]+(\.[0-9]+)?$', word):
-            tokens.append(('number', word))
-        elif re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', word):
-            tokens.append(('identifier', word))
-        else:
-            tokens.append(('other', word))
-    
-    # Фільтруємо тільки ті токени, які нас цікавлять (ключові слова, оператори, розділювачі)
-    filtered_tokens = [token[1] for token in tokens if token[0] in ['keyword', 'operator', 'delimiter']]
-    
-    return filtered_tokens
-
+    # Повертаємо всі елементи, включно з коментарями якщо потрібно
+    return all_elements
 def remove_punctuation_for_words(data):
     # Split the text into words using regular expression
     words = re.findall(r'\b\w+(?:[-\']\w+)*\b', data)
@@ -389,15 +453,14 @@ def fit(x, a, b):
     return a * (x ** b)
 
 
-def prepere_data(data, n, split, file_type='regular', language=None):
+def prepere_data(data, n, split, file_type='regular', language=None, filename=None, include_comments=False):
     global L
     if n is None:
         return dash.no_update
     
     # Якщо це програмний код
     if file_type == 'code' and language:
-        # Викликаємо функцію для обробки коду
-        code_tokens = process_code(data, language)
+        code_tokens = process_code(data, language, include_comments, filename)
         
         # Якщо n > 1, створюємо n-грами
         if n > 1:
@@ -521,7 +584,6 @@ def prepere_data(data, n, split, file_type='regular', language=None):
     
     L = 0
     return []
-
 # @jit(nopython=True)
 def dfa(data, args, overlap_mode="overlapping", min_window=None, window_expansion=None):
     wi, wh, l = args
@@ -620,6 +682,33 @@ text_type_modal = dbc.Modal(
                 value="regular",
                 inline=True
             ),
+            html.Div([
+                html.Label("Мова програмування (якщо автоматичне визначення неправильне):", 
+                          style={"marginTop": "15px", "marginBottom": "5px"}),
+                dbc.Select(
+                    id="language-selector",
+                    options=[
+                        {"label": "Автоматично", "value": "auto"},
+                        {"label": "Python", "value": "python"},
+                        {"label": "JavaScript", "value": "javascript"},
+                        {"label": "Java", "value": "java"},
+                        {"label": "C", "value": "c"},
+                        {"label": "C++", "value": "cpp"},
+                        {"label": "C#", "value": "csharp"},
+                        {"label": "PHP", "value": "php"},
+                        {"label": "Ruby", "value": "ruby"},
+                        {"label": "Go", "value": "go"},
+                        {"label": "Rust", "value": "rust"},
+                        {"label": "Swift", "value": "swift"},
+                        {"label": "Kotlin", "value": "kotlin"},
+                        {"label": "TypeScript", "value": "typescript"},
+                        {"label": "HTML", "value": "html"},
+                        {"label": "CSS", "value": "css"},
+                        {"label": "SQL", "value": "sql"}
+                    ],
+                    value="auto"
+                )
+            ], id="language-selector-container", style={"display": "none"})
         ]),
         dbc.ModalFooter(
             dbc.Button("Підтвердити", id="text-type-confirm", className="ml-auto")
@@ -731,7 +820,7 @@ html.Div(id="file-type-info", children="", style={"display": "none", "margin": "
                                                 value="no",
                                                 style={"font-weight": "bold"}
                                             ),
-                                    dbc.InputGroupText("Boundary Condition:")
+                                    dbc.InputGroupText("Boundary Condition:")  
                                 ], 
                                 size="md", 
                                 className="mb-2"
@@ -760,7 +849,18 @@ html.Div(id="file-type-info", children="", style={"display": "none", "margin": "
                                         className="mb-3"
                                     ),
                                 ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
-                                
+                                # Додайте цей код після вибору типу файлу, до блоку ANALYSIS PARAMETERS SECTION
+                                html.Div([
+                                    dbc.Checklist(
+                                        options=[
+                                            {"label": "Включати коментарі при аналізі коду", "value": True}
+                                        ],
+                                        value=[True],
+                                        id="include-comments-switch",
+                                        switch=True,
+                                        style={"margin": "10px 0"}
+                                    ),
+                                ], id="comments-switch-container", style={"display": "none", "margin": "10px 0", "padding": "5px", "background-color": "#f8f9fa", "borderRadius": "5px"}),
                                 # WINDOW SETTINGS SECTION
                                 html.Div([
                                     html.H6("Window Settings", 
@@ -1314,9 +1414,10 @@ def update_upload_status(contents, filenames, n_size):
      Input('split', 'value'),
      Input('file-language-store', 'data')],  # Використовувати file-language-store, а не file-language
     [State('def', 'value'),
-     State('n_size', 'value')]
+     State('n_size', 'value'),
+     State('include-comments-switch', 'value')], 
 )
-def process_selected_file(selected_filename, split, file_info, definition, n):
+def process_selected_file(selected_filename, split, file_info, definition, n, include_comments):
     global L, data, length_updated
     
     if selected_filename is None or selected_filename not in uploaded_files:
@@ -1331,7 +1432,8 @@ def process_selected_file(selected_filename, split, file_info, definition, n):
     if file_info and file_info['type'] == 'code':
         # Обробка коду
         language = file_info['language']
-        code_tokens = process_code(file_content, language)
+        include_comments_bool = True if include_comments else False
+        code_tokens = process_code(file_content, language, include_comments_bool, selected_filename)
         
         # Оновлюємо глобальні змінні
         data = code_tokens
@@ -1354,6 +1456,10 @@ def process_selected_file(selected_filename, split, file_info, definition, n):
         
         # Показуємо інформацію про довжину
         lengths_str = f"Length: {L} (code tokens) | Language: {language.upper()}"
+        if include_comments_bool:
+            lengths_str += " (with comments)"
+        else:
+            lengths_str += " (without comments)"
         
         return [lengths_str], w, w, w, wm
     else:
@@ -1456,7 +1562,8 @@ new_ngram = None
 def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definition, min_dist_option, 
                       overlap_mode, w, wh, we, wm, batch_window_mode):
     global batch_results, uploaded_files, file_lengths, file_types
-    
+    global L, data, length_updated, model, V, df, new_ngram
+
     if n_clicks is None or not uploaded_files:
         return [], {"display": "none"}
     
@@ -1467,9 +1574,11 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         file_type_info = file_types.get(filename, {'type': 'regular', 'language': 'none'})
         
         if file_type_info['type'] == 'code':
-            # Для програмного коду використовуємо довжину токенів коду
-            if 'code_tokens' in file_lengths.get(filename, {}):
-                lengths.append(file_lengths[filename]['code_tokens'])
+            include_comments_value = True  # За замовчуванням включаємо коментарі в пакетному режимі
+            data = prepere_data(file_content, n_size, split, file_type='code', 
+                               language=file_type_info['language'], 
+                               filename=filename, 
+                               include_comments=include_comments_value)
         else:
             # Для звичайного тексту використовуємо вибраний тип розбиття
             if split in file_lengths.get(filename, {}):
@@ -1505,9 +1614,6 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         
         # Process the file
         start_time = time()
-        
-        # Prepare data
-        global L, data, length_updated, model, V, df, new_ngram
         
         length_updated = False
         
@@ -1728,7 +1834,6 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         batch_results.append(stds)
     
     return batch_results, {"display": "block"}
-
 @app.callback(
     Output("batch_table", "columns"),
     [Input("batch_process", "n_clicks")]
@@ -2072,28 +2177,24 @@ def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option
 
 clikced_ngram = None
 
-# Додамо модальне вікно
-text_type_modal = dbc.Modal(
-    [
-        dbc.ModalHeader("Виберіть тип тексту"),
-        dbc.ModalBody([
-            dbc.RadioItems(
-                id="text-type-selector",
-                options=[
-                    {"label": "Звичайний текст", "value": "regular"},
-                    {"label": "Програмний код", "value": "code"}
-                ],
-                value="regular",
-                inline=True
-            ),
-        ]),
-        dbc.ModalFooter(
-            dbc.Button("Підтвердити", id="text-type-confirm", className="ml-auto")
-        ),
-    ],
-    id="text-type-modal",
-    centered=True,
+
+@app.callback(
+    Output("comments-switch-container", "style"),
+    [Input('file-language-store', 'data')]
 )
+def toggle_comments_switch(file_info):
+    if file_info and file_info.get('type') == 'code':
+        return {"display": "block", "margin": "10px 0", "padding": "5px", "background-color": "#f8f9fa", "borderRadius": "5px"}
+    return {"display": "none"}
+
+@app.callback(
+    Output("language-selector-container", "style"),
+    [Input("text-type-selector", "value")]
+)
+def toggle_language_selector(text_type):
+    if text_type == "code":
+        return {"display": "block"}
+    return {"display": "none"}
 
 @app.callback(
     [Output('text-type-modal', 'is_open'),
@@ -2131,16 +2232,18 @@ def handle_file_type_selection(selected_filename, confirm_clicks, text_type, is_
     [Output('file-type-info', 'children'),
      Output('file-type-info', 'style')],
     [Input('file-language-store', 'data'),
-     Input('file-selector', 'value')]
+     Input('file-selector', 'value'),
+     Input('include-comments-switch', 'value')]
 )
-def update_file_type_info(file_info, filename):
+def update_file_type_info(file_info, filename, include_comments):
     if not filename or not file_info:
         return "", {"display": "none"}
     
     if file_info['type'] == 'regular':
         return "Тип: Звичайний текст", {"display": "block"}
     else:
-        return f"Тип: Програмний код ({file_info['language'].upper()})", {"display": "block"}
+        comments_text = " (з коментарями)" if include_comments else " (без коментарів)"
+        return f"Тип: Програмний код ({file_info['language'].upper()}){comments_text}", {"display": "block"}
 
 @app.callback([Output("graphs", "figure"), Output("fa", "figure"), ],
               [Input("dataframe", "active_tab"),

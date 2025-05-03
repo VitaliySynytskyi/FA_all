@@ -22,29 +22,9 @@ import webbrowser
 from pygments import lex
 from pygments.lexers import get_lexer_by_name, get_lexer_for_filename, guess_lexer, TextLexer
 from pygments.token import Token
-from dash.dependencies import Input, Output, State
 
 
 include_comments_state = {}
-def get_comment_prefixes(language):
-    """Отримує префікси коментарів для конкретної мови програмування"""
-    comment_prefixes = {
-        'c': ['//', '/*', '*/'],
-        'cpp': ['//', '/*', '*/'],
-        'java': ['//', '/*', '*/'],
-        'javascript': ['//', '/*', '*/'],
-        'kotlin': ['//', '/*', '*/'],
-        'swift': ['//', '/*', '*/'],
-        'php': ['//', '#', '/*', '*/'],
-        'python': ['#'],
-        'ruby': ['#'],
-        'sql': ['--', '#', '/*', '*/'],
-        'css': ['/*', '*/'],
-        'html': ['<!--', '-->'],
-        'go': ['//', '/*', '*/']
-    }
-    return comment_prefixes.get(language, [])
-
 def tokenize_code_with_pygments(code_content, language=None, filename=None):
     """
     Токенізує код за допомогою Pygments, зберігаючи всі елементи коду та коментарі окремо.
@@ -63,9 +43,6 @@ def tokenize_code_with_pygments(code_content, language=None, filename=None):
     code_tokens = []
     comment_tokens = []
     
-    # Отримуємо префікси коментарів для заданої мови
-    comment_prefixes = get_comment_prefixes(language) if language else []
-    
     for token_type, token_value in lex(code_content, lexer):
         # Перетворюємо багаторядковий текст в окремі рядки
         token_value = token_value.replace('\r\n', '\n')
@@ -77,76 +54,19 @@ def tokenize_code_with_pygments(code_content, language=None, filename=None):
                 
             # Визначаємо, чи це коментар
             if token_type in Token.Comment:
-                # Для C/C++ перевіряємо, чи це не директива препроцесора
-                if language in ['c', 'cpp'] and line.strip().startswith('#'):
-                    # Це директива препроцесора, обробляємо як код
-                    code_tokens.append((Token.Generic.Emph, line.strip()))  # Можна викор. спеціальний тип токену
-                    print(f"PREPROCESSOR DIRECTIVE: {line.strip()}")
-                else:
-                    # Обробляємо коментар як природний текст
-                    if line.strip():
-                        cleaned_line = line
-                        # Видаляємо символи коментарів, специфічні для мови
-                        for comment_prefix in comment_prefixes:
-                            cleaned_line = cleaned_line.replace(comment_prefix, ' ')
-                        
-                        # Використовуємо ту ж логіку обробки, що й для звичайного тексту
-                        processor = NgrammProcessor(ignore_punctuation=True)
-                        processor.preprocess(cleaned_line)
-                        words = processor.get_words()
-                        comment_tokens.extend(words)
-                        print(f"COMMENT: {line.strip()} -> {words}")
+                # Обробляємо коментар як природний текст
+                # Прибираємо символи початку коментарів
+                clean_comment = re.sub(r'^[/#*]+\s*', '', line).strip()
+                if clean_comment:  # Якщо є текст після символів коментаря
+                    # Розбиваємо на слова і додаємо до коментарів
+                    words = re.findall(r'\b\w+\b', clean_comment)
+                    comment_tokens.extend(words)
             else:
                 # Додаємо нетривіальні токени коду
                 if line.strip():
                     code_tokens.append((token_type, line.strip()))
-                    print(f"CODE TOKEN: {token_type}, {line.strip()}")
     
     return code_tokens, comment_tokens
-
-def tokenize_code_with_pygments_without_comments(code_content, language=None, filename=None, include_comments=True):
-    """
-    Токенізує код за допомогою Pygments, зберігаючи всі елементи коду.
-    """
-    # Визначаємо lexer
-    try:
-        if filename:
-            lexer = get_lexer_for_filename(filename)
-        elif language:
-            lexer = get_lexer_by_name(language)
-        else:
-            lexer = TextLexer()
-    except:
-        lexer = TextLexer()
-    
-    code_tokens = []
-    
-    for token_type, token_value in lex(code_content, lexer):
-        # Перетворюємо багаторядковий текст в окремі рядки
-        token_value = token_value.replace('\r\n', '\n')
-        lines = token_value.split('\n')
-        
-        for i, line in enumerate(lines):
-            if not line.strip():  # Пропускаємо порожні рядки
-                continue
-                
-            # Перевірка що це директива препроцесора або код
-            if (token_type in (Token.Comment.Preproc, Token.Preproc, Token.Keyword.Pseudo) or
-                (language in ['c', 'cpp'] and line.strip().startswith('#'))):
-                # Директива препроцесора
-                code_tokens.append((token_type, line.strip()))
-            elif token_type in Token.Comment:
-                # ПРОПУСКАЄМО коментарі, нічого не робимо
-                continue
-            else:
-                # Додаємо токени коду
-                if line.strip():
-                    code_tokens.append((token_type, line.strip()))
-    
-    # Повертаємо тільки код, без коментарів
-    return code_tokens, []
-
-
 def get_all_code_elements(code_tokens):
     """
     Витягує всі елементи коду з токенів, включаючи ключові слова, оператори, ідентифікатори тощо.
@@ -171,9 +91,8 @@ def get_all_code_elements(code_tokens):
             # Імена (ідентифікатори, функції тощо)
             all_elements.append(token_value)
         elif token_type in Token.Literal.String:
-            # Рядки розбиваємо на символи та слова
-            tokens = re.findall(r'\w+|[^\w\s]', token_value)
-            all_elements.extend(tokens)
+            # Рядки
+            all_elements.append(token_value)
         elif token_type in Token.Literal.Number:
             # Числа
             all_elements.append(token_value)
@@ -186,43 +105,30 @@ def get_all_code_elements(code_tokens):
                 all_elements.append(token_value)
     
     return all_elements
-def process_code_improved(file_content, language=None, filename=None, include_comments=True):
-    print(f"\n--- PROCESS CODE IMPROVED ---")
-    print(f"Language: {language}")
-    print(f"Filename: {filename}")
-    print(f"Include comments: {include_comments}")
-    print(f"File content length: {len(file_content)}")
-    
-    try:
-        # Вибираємо правильну функцію в залежності від прапора
-        if include_comments:
-            code_tokens, comment_tokens = tokenize_code_with_pygments(file_content, language, filename)
-        else:
-            code_tokens, comment_tokens = tokenize_code_with_pygments_without_comments(file_content, language, filename)
-        
-        print(f"Code tokens: {len(code_tokens)}")
-        print(f"Comment tokens: {len(comment_tokens)}")
-        
-        # Отримуємо всі елементи коду
-        code_elements = get_all_code_elements(code_tokens)
-        print(f"Code elements: {len(code_elements)}")
-        
-        # Якщо включати коментарі і вони є
-        if include_comments and comment_tokens:
-            all_elements = code_elements + comment_tokens
-        else:
-            all_elements = code_elements
-        
-        print(f"All elements total: {len(all_elements)}")
-        
-        return code_elements, comment_tokens, all_elements
-        
-    except Exception as e:
-        print(f"ERROR IN PROCESS CODE IMPROVED: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
 
+def process_code_improved(file_content, language=None, filename=None, include_comments=True):
+    # Токенізуємо код
+    code_tokens, comment_tokens = tokenize_code_with_pygments(file_content, language, filename)
+    
+    print(f"DEBUGGING: Comment tokens contain 'name'? {'name' in comment_tokens}")
+    
+    # Отримуємо всі елементи коду
+    code_elements = get_all_code_elements(code_tokens)
+    
+    print(f"DEBUGGING: Code elements contain 'name'? {'name' in code_elements}")
+    
+    # Якщо включати коментарі
+    if include_comments:
+        all_elements = code_elements + comment_tokens
+        print(f"DEBUGGING: Including comments, include_comments={include_comments}")
+    else:
+        all_elements = code_elements
+        print(f"DEBUGGING: Excluding comments, include_comments={include_comments}")
+    
+    print(f"DEBUGGING: Final all_elements contain 'name'? {'name' in all_elements}")
+    
+    return code_elements, comment_tokens, all_elements
+    
 def detect_programming_language(filename):
     """Визначає мову програмування за розширенням файлу"""
     extension = filename.split('.')[-1].lower()
@@ -249,38 +155,23 @@ def detect_programming_language(filename):
     return language_extensions.get(extension, 'text')
 
 def process_code(file_content, language, include_comments=True, filename=None):
-    print(f"\n*** PROCESS CODE ***")
-    print(f"Language: {language}")
-    print(f"Include comments: {include_comments}")
-    print(f"Filename: {filename}")
-    print(f"File content length: {len(file_content)}")
+    """Обробляє програмний код, виділяючи всі елементи включно з коментарями"""
+    # Використовуємо нову функцію для обробки коду
+    code_elements, comment_elements, all_elements = process_code_improved(
+        file_content, language, filename, include_comments
+    )
     
-    try:
-        # Використовуємо нову функцію для обробки коду
-        code_elements, comment_elements, all_elements = process_code_improved(
-            file_content, language, filename, include_comments
-        )
-        
-        # Вивід для відлагодження
-        print("Приклади токенів:", all_elements[:20])
-        print("Загальна кількість токенів:", len(all_elements))
-        
-        # Підрахунок пунктуації
-        punctuation = [t for t in all_elements if t in ".,(){}[]<>;:'\"!?+-*/="]
-        print("Кількість токенів пунктуації:", len(punctuation))
-        print("Приклади пунктуації:", punctuation[:20])
-        
-        # Повертаємо всі елементи, виключаючи коментарі якщо потрібно
-        print(f"Returning {len(all_elements)} elements")
-        return all_elements
-        
-    except Exception as e:
-        print(f"ERROR IN PROCESS CODE: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
+    # Вивід для відлагодження
+    print("Приклади токенів:", all_elements[:20])
+    print("Загальна кількість токенів:", len(all_elements))
     
-    print("*** END PROCESS CODE ***\n")
+    # Підрахунок пунктуації
+    punctuation = [t for t in all_elements if t in ".,(){}[]<>;:'\"!?+-*/="]
+    print("Кількість токенів пунктуації:", len(punctuation))
+    print("Приклади пунктуації:", punctuation[:20])
+    
+    # Повертаємо всі елементи, виключаючи коментарі якщо потрібно
+    return all_elements
 def remove_punctuation_for_words(data):
     # Split the text into words using regular expression
     words = re.findall(r'\b\w+(?:[-\']\w+)*\b', data)
@@ -407,17 +298,13 @@ def make_markov_chain(data, order=1):
         if data[L] in model:
             model[data[L]].update({data[0]: 1})
         else:
-            model[data[L]] = Ngram([data[0]])
-            model[data[L]].pos = []
-            model[data[L]].bool = np.zeros(L, dtype=np.uint8)
+            model[data[L]] = {data[0]: 1}
 
             # Connect the first word with the last one
         if data[0] in model:
             model[data[0]].update({data[L]: 1})
         else:
-            model[data[0]] = Ngram([data[L]])
-            model[data[0]].pos = []
-            model[data[0]].bool = np.zeros(L, dtype=np.uint8)
+            model[data[0]] = {data[L]: 1}
     V = len(model)
 
 
@@ -433,16 +320,8 @@ def calculate_distance(positions, L, option, ngram, min_dist=1):
 @jit(nopython=True)
 def nbc(positions, min_dist=1):
     number_of_pos = len(positions)
-    
-    # Для Numba перевірка на порожній масив
-    if number_of_pos <= 0:
-        # Створюємо порожній масив через np.zeros і зменшуємо його розмір до 0
-        return np.zeros(0, dtype=np.uint32)
-    
-    # Перевірка на один елемент  
     if number_of_pos == 1:
-        return np.zeros(0, dtype=np.uint32)  # Повертаємо пустий масив
-        
+        return positions
     dt = np.empty(number_of_pos - 1, dtype=np.uint32)
     for i in range(number_of_pos - 1):
         dt[i] = positions[i + 1] - positions[i]
@@ -450,28 +329,10 @@ def nbc(positions, min_dist=1):
             dt[i] = dt[i] - 1
     return dt
 
+
 @jit(nopython=True)
 def obc(positions, L, min_dist=1):
     number_of_pos = len(positions)
-    
-    # Перевірка на порожній масив
-    if number_of_pos <= 0:
-        return np.zeros(0, dtype=np.uint32)
-    
-    # Якщо тільки один елемент
-    if number_of_pos == 1:
-        if min_dist == 0 and positions[0] > 0:
-            dt0 = positions[0] - 1
-        else:
-            dt0 = positions[0]
-            
-        if min_dist == 0 and L - positions[0] > 0:
-            dt1 = L - positions[0] - 1
-        else:
-            dt1 = L - positions[0]
-            
-        return np.array([dt0, dt1], dtype=np.uint32)
-    
     dt = np.empty(number_of_pos + 1, dtype=np.uint32)
     dt[0] = positions[0]
     if min_dist == 0 and dt[0] > 0:
@@ -485,21 +346,10 @@ def obc(positions, L, min_dist=1):
         dt[-1] = dt[-1] - 1
     return dt
 
+
 @jit(nopython=True)
 def pbc(positions, L, test, min_dist=1):
     number_of_pos = len(positions)
-    
-    # Перевірка на порожній масив
-    if number_of_pos <= 0:
-        return np.zeros(0, dtype=np.uint32)
-    
-    # Перевірка на один елемент  
-    if number_of_pos == 1:
-        distance = L
-        if min_dist == 0 and distance > 0:
-            distance = distance - 1
-        return np.array([distance], dtype=np.uint32)
-    
     dt = np.zeros(number_of_pos, dtype=np.uint32)
     for i in range(number_of_pos - 1):
         dt[i] = positions[i + 1] - positions[i]
@@ -509,6 +359,7 @@ def pbc(positions, L, test, min_dist=1):
     if min_dist == 0 and dt[-1] > 0:
         dt[-1] = dt[-1] - 1
     return dt
+
 
 @jit(nopython=True)
 def s(window):
@@ -527,14 +378,10 @@ def mse(x):
 
 @jit(nopython=True, fastmath=True)
 def R(x):
-    if len(x) == 0:  # Додайте перевірку на порожній масив
-        return 0.0
     if len(x) == 1:
         return 0.0
     t = np.mean(x)
     ts = np.std(x)
-    if t == 0:  # Також перевірте ділення на нуль
-        return 0.0
     return ts / t
 
 
@@ -590,36 +437,26 @@ def fit(x, a, b):
 
 
 def prepere_data(data, n, split, file_type='regular', language=None, filename=None, include_comments=False):
-    print(f"\n=== PREPERE DATA ===")
-    print(f"n: {n}")
-    print(f"split: {split}")
-    print(f"file_type: {file_type}")
-    print(f"language: {language}")
-    print(f"filename: {filename}")
-    print(f"include_comments: {include_comments}")
     global L
     if n is None:
-        print("N IS NONE - RETURNING NO UPDATE")
         return dash.no_update
     
+    # Якщо це програмний код
     if file_type == 'code' and language:
-            print(f"Processing code with include_comments={include_comments}")
-            code_tokens = process_code(data, language, include_comments, filename)
-            print(f"Got {len(code_tokens)} code tokens")
-            
-            # Якщо n > 1, створюємо n-грами
-            if n > 1:
-                temp_data = []
-                L = len(code_tokens)
-                for i in range(L - n + 1):
-                    window = tuple(code_tokens[i:i + n])
-                    temp_data.append(window)
-                print(f"Created {len(temp_data)} n-grams")
-                return temp_data
-            else:
-                L = len(code_tokens)
-                print(f"Returning code tokens, L = {L}")
-                return code_tokens
+        print(f"Processing code with include_comments={include_comments}")  # Додайте для відлагодження
+        code_tokens = process_code(data, language, include_comments, filename)
+        
+        # Якщо n > 1, створюємо n-грами
+        if n > 1:
+            temp_data = []
+            L = len(code_tokens)
+            for i in range(L - n + 1):
+                window = tuple(code_tokens[i:i + n])
+                temp_data.append(window)
+            return temp_data
+        else:
+            L = len(code_tokens)
+            return code_tokens
     
     # Звичайний текст - стандартна обробка
     temp_data = []
@@ -800,17 +637,10 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 uploaded_files = {}
 # Dictionary to store file lengths with structure: {filename: {'word': length, 'symbol': length, 'letter': length}}
 file_lengths = {}
-file_types = {}
-batch_results = []
-model = dict()
-V = 0
-L = 0
-data = []
-df = None
-g = None
-new_ngram = None
-ngram = None
 
+file_types = {}
+# List to store batch processing results
+batch_results = []
 
 # Removing the corpuses list since we're using file upload now
 # corpuses = listdir("corpus/")
@@ -1410,7 +1240,7 @@ html.Div(id="file-type-info", children="", style={"display": "none", "margin": "
         ]
     ),
     dcc.Store(id='file-language-store', storage_type='memory'),
-    dcc.Store(id='temp-state-holder', storage_type='memory'),
+
     dcc.Store(id='stored-data'),
     html.Div(id='output-message'),
     dbc.Toast(
@@ -1424,6 +1254,7 @@ html.Div(id="file-type-info", children="", style={"display": "none", "margin": "
         style={"position": "fixed", "top": "40%", "right": "40%", "width": 500, "zIndex": 9999}
     )
 ])
+from dash.dependencies import Input, Output, State
 
 app.layout = html.Div([
     layout1,
@@ -1540,11 +1371,9 @@ def update_upload_status(contents, filenames, n_size):
                 print(f"✗ Error: {filename} is not a valid text file")
                 error_count += 1
         except Exception as e:
-             print(f"ERROR IN PREPERE DATA: {e}")
-             import traceback
-             traceback.print_exc()
-             raise
-        print("=== END PREPERE DATA ===\n")
+            print(f"✗ Error processing {filename}: {str(e)}")
+            error_count += 1
+    
     # Create summary message for display
     summary_message = html.Div([
         html.H5(f"Upload Summary:"),
@@ -1608,17 +1437,8 @@ def process_selected_file(selected_filename, split, file_info, definition, n, in
         file_types[selected_filename] = {'type': 'code', 'language': language}
         
         # Обчислюємо параметри вікна
-
-        if L < 20:
-            wm = min(10, L)
-            w = min(3, L)
-            wh = 1
-            we = 1
-        else:
-            wm = int(L / 20)
-            w = int(wm / 20)
-            wh = w
-            we = w
+        wm = int(L / 20)
+        w = int(wm / 20)
         
         length_updated = True
         
@@ -1691,10 +1511,7 @@ def process_selected_file(selected_filename, split, file_info, definition, n, in
             file_types[selected_filename] = {'type': 'regular', 'language': 'none'}
             
             length_updated = True
-        wm = max(10, wm)  # Мінімум 10
-        w = max(5, w)     # Мінімум 5
-        wh = max(1, wh)   # Мінімум 1
-        we = max(1, we)         
+        
         # Show all three lengths for the selected file
         lengths_str = "Length: {} ({}s) | ".format(L, split)
         for split_type in ['word', 'symbol', 'letter']:
@@ -1714,15 +1531,10 @@ new_ngram = None
     [Input('include-comments-switch', 'value')],
     [State('file-selector', 'value'),
      State('split', 'value'),
-     State('file-language-store', 'data'),
-     State('n_size', 'value')]
+     State('file-language-store', 'data')]
 )
-def update_comment_state(include_comments, selected_filename, split, file_info, n_size):
+def update_comment_state(include_comments, selected_filename, split, file_info):
     if not selected_filename or not file_info:
-        return dash.no_update
-        
-    # Перевірка, чи file_info є словником
-    if not isinstance(file_info, dict):
         return dash.no_update
         
     # Тут можна додати очищення моделі і повторний аналіз
@@ -1731,7 +1543,7 @@ def update_comment_state(include_comments, selected_filename, split, file_info, 
     model = dict()
     V = 0
     
-    if file_info and file_info.get('type') == 'code':  # Використовуй get() для безпеки
+    if file_info and file_info['type'] == 'code':
         file_content = uploaded_files.get(selected_filename, "")
         include_comments_bool = True if True in include_comments else False
         
@@ -1743,15 +1555,14 @@ def update_comment_state(include_comments, selected_filename, split, file_info, 
         include_comments_val = include_comments_state.get(selected_filename, False)
         
         data = prepere_data(file_content, n_size, split, file_type='code', 
-                           language=file_info.get('language'), 
+                           language=file_info['language'], 
                            filename=selected_filename, 
                            include_comments=include_comments_val)
         L = len(data)
         length_updated = True
     
     return {"include_comments": include_comments_bool if include_comments else False}
-
-
+# Add callback for batch processing
 @app.callback(
     [Output("batch_table", "data"),
      Output("batch_results_container", "style")],
@@ -1785,7 +1596,6 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         file_type_info = file_types.get(filename, {'type': 'regular', 'language': 'none'})
         
         if file_type_info['type'] == 'code':
-            file_content = uploaded_files[filename]
             include_comments_value = True  # За замовчуванням включаємо коментарі в пакетному режимі
             model = dict()
             L = 0           
@@ -1920,6 +1730,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         # Process positions and calculate parameters
         for index, ngram in enumerate(current_df['ngram']):
             model[ngram].dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_option)
+            
         windows = list(range(w_val, wm_val, we_val))
         
         temp_gamma = []
@@ -2142,12 +1953,8 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
                ])
 def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option, 
                  overlap_mode, n_size, split, condition, file_info, selected_filename):
-    global length_updated, data, model, df, L, V, ngram, g, new_ngram
-    if 'V' not in globals():
-        V = 0
-
-    print("=== update_table function called ===")
-    print(f"n_clicks: {n}, dataframe: {dataframe}, definition: {definition}")
+    global length_updated
+    
     print("=== update_table function called ===")
     print(f"n_clicks: {n}, dataframe: {dataframe}, definition: {definition}")
 
@@ -2158,31 +1965,6 @@ def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option
                  dash.no_update,
                 )
 
-    # ДОДАЙТЕ ЦІ ПЕРЕВІРКИ:
-    # Перевірка глобальних змінних
-    if not globals().get('data') and not globals().get('L'):
-        if selected_filename in uploaded_files:
-            file_content = uploaded_files[selected_filename]
-            # Спробуйте підготувати дані
-            try:
-                data = prepere_data(file_content, n_size, split, 
-                                    file_type='code' if file_info and file_info.get('type') == 'code' else 'regular',
-                                    language=file_info.get('language') if file_info else None,
-                                    filename=selected_filename,
-                                    include_comments=True)
-                L = len(data) if data else 0
-                V = 0
-                model = dict()
-            except Exception as e:
-                print(f"Error preparing data: {e}")
-                return ([], dash.no_update, {"display": "inline"}, {"display": "none"}, 
-                        dbc.Alert(f"Error processing data: {str(e)}", color="danger", duration=2000),
-                        ["Length: 0"], ["Time: 0"], dash.no_update)
-        else:
-            return ([], dash.no_update, {"display": "inline"}, {"display": "none"}, 
-                    dbc.Alert("No file selected or uploaded", color="danger", duration=2000),
-                    ["Length: 0"], ["Time: 0"], dash.no_update)
-
     if not length_updated:
         print("length_updated is False, returning toast notification")
         return (dash.no_update, dash.no_update, {"display": 'inline'}, {
@@ -2190,22 +1972,17 @@ def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option
                  True
                 )
 
-    # Перевірка на data
-    if data is None or (isinstance(data, list) and len(data) == 0):
-        return ([], dash.no_update, {"display": "inline"}, {"display": "none"}, 
-                dbc.Alert("No data to analyze", color="danger", duration=2000),
-                ["Length: 0"], ["Time: 0"], dash.no_update)
-    
-    # Перевірка на L
-    if not isinstance(L, int) or L <= 0:
-        L = len(data) if data else 0
-        if L <= 0:
-            return ([], dash.no_update, {"display": "inline"}, {"display": "none"}, 
-                    dbc.Alert("Invalid data length", color="danger", duration=2000),
-                    ["Length: 0"], ["Time: 0"], dash.no_update)
+    # Replace corpus check with data check
+    if data is None or len(data) == 0:
+        print("data is None or empty, returning error alert")
+        return (dash.no_update, dash.no_update, {"display": "inline"}, {"display": "none"}, dbc.Alert(
+            "Please upload a file", color="danger", duration=2000,
+            dismissable=False), dash.no_update, dash.no_update,
+                 dash.no_update)
 
+    global L, V, model, ngram, df, g, new_ngram
     
-    print(f"data length: {len(data)}, L: {L}, V: {globals().get('V', 'not defined')}")
+    print(f"data length: {len(data)}, L: {L}, V: {V}")
 
     if dataframe == "markov_chain":
         print("=== Building Markov Chain Graph ===")
@@ -2324,12 +2101,7 @@ def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option
         if definition == "dynamic":
             print("=== Starting Dynamic Mode ===")
             start = time()
-            we = max(1, we)
-            try:
-              windows = list(range(w, wm, we))
-            except ValueError:
-              we = 1
-              windows = list(range(w, wm, we))
+            windows = list(range(w, wm, we))
             print(f"Windows range: {w} to {wm} step {we}")
             print(f"Total windows: {len(windows)}")
             
@@ -2411,12 +2183,8 @@ def update_table(n, dataframe, f_min, w, wh, we, wm, definition, min_dist_option
                                                             overlap_mode=overlap_mode, min_window=w, window_expansion=we)
                 
                 model[ngram].fa[wind] = mse(model[ngram].counts[wind])
-            we = max(1, we)
-            try:
-               windows = list(range(w, wm, we))
-            except ValueError:
-               we = 1
-               windows = list(range(w, wm, we))
+
+            windows = list(range(w, wm, we))
             print(f"Windows range: {w} to {wm} step {we}")
             print(f"Total windows: {len(windows)}")
 
@@ -2578,6 +2346,7 @@ def update_file_type_info(file_info, filename, include_comments):
               [Input("dataframe", "active_tab"),
                Input("card-tabs", "active_tab"),
                Input("table", "active_cell"),
+                # NOTE додала параметр page_current та використала його для показу правильної інформації
                Input("table", "page_current"),
                Input("table", "derived_virtual_selected_rows"),
                Input("table", "derived_virtual_indices"),
@@ -2585,18 +2354,13 @@ def update_file_type_info(file_info, filename, include_comments):
                Input("scale", "value"),
                Input("fa", "clickData"),
                Input("graphs", "clickData"),
-               Input("wh", "value"),
-               Input("w", "value"),
-               Input("we", "value"),  # ДОДАЙТЕ ЦЕ!
-               Input("overlap_mode", "value")],
+               Input("wh", "value")],
               [State("n_size", "value"),
                State("def", "value"), ])
 def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, ids, clicked_data, scale, fa_click,
-                graph_click, wh, w, we, overlap_mode, n_size, definition):
+                graph_click, wh, n,
+                definition):
     global model, df, L, g, new_ngram, ngram
-    ww = None
-    if fa_click and "points" in fa_click:
-        ww = fa_click["points"][0]["x"]
     if df is None:
         return dash.no_update, dash.no_update
 
@@ -2622,7 +2386,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
         if clicked_data:
             nodes = np.array(g.nodes())
             ngram = nodes[clicked_data['points'][0]['pointNumber']]
-            if n_size > 1:
+            if n > 1:
 
                 ngram = tuple(nodes[clicked_data['points'][0]['pointNumber']])
 
@@ -2737,7 +2501,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
 
                     return fig, fig1
 
-                if n_size > 1:
+                if n > 1:
                     ngram = tuple(df['ngram'][ids[active_cell['row']]].split())
                     if ngram[0] == 'new_ngram':
                         ngram = 'new_ngram'
@@ -2798,7 +2562,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
 
                     return fig, fig1
 
-                if n_size > 1:
+                if n > 1:
                     ngram = tuple(df['ngram'][ids[active_cell['row']]].split())
                     if ngram[0] == 'new_ngram':
                         ngram = 'new_ngram'

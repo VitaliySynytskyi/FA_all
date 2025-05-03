@@ -511,7 +511,6 @@ def make_windows(x: np.ndarray, wi: int, l: int, wsh: int,
     Returns:
         np.ndarray: Масив сум у вікнах
     """
-    print(1331111111111)
     # Використовуємо Numba для оптимізації
     if overlap_mode == "overlapping":
         # Визначаємо кількість вікон заздалегідь для уникнення повторного обчислення
@@ -1533,7 +1532,6 @@ def update_upload_status(contents, filenames, n_size, split_mode):
      State('n_size', 'value')]
 )
 def process_selected_file(selected_filename, split, definition, n):
-    print(2222222222222222)
     global L, data, length_updated, isComputerText
     
     if selected_filename is None or selected_filename not in uploaded_files:
@@ -2715,29 +2713,46 @@ def pick_folder():
         return None
 
 @app.callback(
-    Output('isComputerTextOutput', 'children'),
+    [Output('isComputerTextOutput', 'children'),
+    Output('file-selector', 'value')],
     Input('computerTextRadio', 'value')
 )
 def update_isComputerText(selected_value):
     global isComputerText
     isComputerText = selected_value
-    return ""
+    return "", None
 
 def guess_lexer_or_text(code, file_path):
     try:
         lexer = guess_lexer_for_filename(file_path, code)
     except Exception:
         lexer = get_lexer_by_name("text")
-    print("lexer",lexer)
     return lexer
 
 def tokenize_code(code, lexer):
+    comm, whitespace, other = 0, 0, 0
     tokens = lex(code, lexer)
     token_list = []
-
     for token_type, token_value in tokens:
-        print(token_value)
-        token_list.append(token_value)
+        if token_type in Token.Comment:
+            comm += 1
+            file_text = re.sub(r'\n+', '\n', token_value)
+            file_text = re.sub(r'\n\s\s', '\n', file_text)
+            file_text = re.sub(r'﻿', '', file_text)
+            file_text = re.sub(r'--', ' -', file_text)
+            processor = NgrammProcessor()
+            processor.preprocess(file_text)
+            for x in processor.get_words():
+                token_list.append(x)
+            del processor
+            del file_text
+        elif token_type in Token.Text or token_type in Token.Whitespace:
+            whitespace += 1
+            pass 
+        else: 
+            other += 1
+            token_list.append(token_value)
+    print("\n comm", comm,"\n whitespace", whitespace,"\n other", other)
     return token_list
 
 # import webbrowser # Commented out as it might cause issues if run non-interactively

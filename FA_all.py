@@ -176,22 +176,22 @@ class Ngram(dict):
 def make_dataframe(model, fmin=3):
     """
     Створює DataFrame для відображення результатів аналізу.
-    
+
     Args:
         model: Словник моделі з n-грамами
         fmin: Мінімальна частота для включення n-грами в аналіз
-        
+
     Returns:
         pd.DataFrame: DataFrame з результатами
     """
     # Фільтруємо n-грами за мінімальною частотою
     filtered_data = list(
         filter(lambda x: sum(value for value in model[x].values() if isinstance(value, int)) >= fmin, model))
-    
+
     # Додаємо new_ngram, якщо вона існує в моделі
     if 'new_ngram' not in filtered_data and 'new_ngram' in model:
         filtered_data.append("new_ngram")
-        
+
     # Створюємо структуру даних для DataFrame
     data = {"ngram": [],
             "F": np.empty(len(filtered_data), dtype=np.dtype(int))}
@@ -2381,7 +2381,6 @@ clikced_ngram = None
               [Input("dataframe", "active_tab"),
                Input("card-tabs", "active_tab"),
                Input("table", "active_cell"),
-                # NOTE додала параметр page_current та використала його для показу правильної інформації
                Input("table", "page_current"),
                Input("table", "derived_virtual_selected_rows"),
                Input("table", "derived_virtual_indices"),
@@ -2389,26 +2388,26 @@ clikced_ngram = None
                Input("scale", "value"),
                Input("fa", "clickData"),
                Input("graphs", "clickData"),
-               Input("w_max", "value")],
+               Input("w_max", "value"),
+               Input("table", "derived_virtual_data")],
               [State("n_size", "value"),
                State("def", "value"), ])
 def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, ids, clicked_data, scale, fa_click,
-                graph_click, w_max, n,
+                graph_click, w_max, derived_virtual_data, n,
                 definition):
-    # Тільки для вкладки DataTable, оскільки MarkovChain було видалено
     if active_tab2 == "data_table":
         fig = go.Figure()
         fig1 = go.Figure()
         if active_tab1 == "tab2":
-            if active_cell:
+            if active_cell and derived_virtual_data:
+                selected_row = derived_virtual_data[active_cell['row']]
+                ngram = selected_row['ngram']
                 if definition == "dynamic":
-                    ## add bar
                     if fa_click:
                         if overlap_mode == "overlapping":
                             fig.add_trace(go.Bar(x=np.arange(w_s, L, w_s), y=new_ngram.count[fa_click["points"][0]["x"]],
                                                 name="∑∆w"))
                         else:
-                            # Для non-overlapping режиму потрібно розрахувати положення барів
                             bar_positions = []
                             k = 1
                             i = 0
@@ -2420,14 +2419,13 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                                 k += 1
                             fig.add_trace(go.Bar(x=bar_positions, y=new_ngram.count[ww], name="∑∆w"))
 
-                    # Перевірка, чи existує new_ngram та його атрибути
                     if new_ngram is not None and hasattr(new_ngram, 'dfa') and new_ngram.dfa:
                         fig1.add_trace(
                             go.Scatter(x=[*new_ngram.dfa.keys()], y=[*new_ngram.dfa.values()], mode='markers', name="∆F"))
-                        
+
                         if hasattr(new_ngram, 'temp_dfa') and new_ngram.temp_dfa:
                             fig1.add_trace(go.Scatter(x=[*new_ngram.dfa.keys()], y=[*new_ngram.temp_dfa], name="fit=aw^b"))
-                        
+
                         fig1.update_xaxes(type=scale)
                         fig1.update_yaxes(type=scale)
                         fig1.update_layout(hovermode="x unified")
@@ -2435,11 +2433,10 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                     return fig, fig1
 
                 if n > 1:
-                    ngram = tuple(df['ngram'][ids[active_cell['row']]].split())
-                    if ngram[0] == 'new_ngram':
+                    if ngram == 'new_ngram':
                         ngram = 'new_ngram'
-                else:
-                    ngram = df['ngram'][ids[active_cell['row']]]
+                    else:
+                        ngram = tuple(ngram.split())
                 fig.add_trace(go.Scatter(x=np.arange(L), y=model[ngram].bool, name="positions"))
 
                 if fa_click:
@@ -2447,10 +2444,10 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                         fig.add_trace(go.Bar(x=np.arange(w_s, L, w_s), y=model[ngram].counts[fa_click["points"][0]["x"]],
                                              name="∑∆w"))
                     else:
-                        # Для non-overlapping режиму потрібно розрахувати положення барів
                         bar_positions = []
                         k = 1
                         i = 0
+                        ww = fa_click["points"][0]["x"]
                         while i < L - ww:
                             bar_positions.append(i)
                             shift = calc_non_overlapping_shift(k, w_s, w_e)
@@ -2482,13 +2479,14 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                 return fig, fig1
         else:
             hover_data = []
-            if active_cell:
+            if active_cell and derived_virtual_data:
+                selected_row = derived_virtual_data[active_cell['row']]
+                ngram = selected_row['ngram']
                 if definition == "dynamic":
                     if fa_click:
                         fig.add_trace(
                             go.Bar(x=np.arange(w_s, L, w_s), y=new_ngram.count[fa_click["points"][0]["x"]], name="∑∆w"))
 
-                    # Перевірка наявності new_ngram та його атрибутів
                     if new_ngram is not None and hasattr(new_ngram, 'R') and hasattr(new_ngram, 'gamma'):
                         fig1.add_trace(go.Scatter(x=new_ngram.R, y=new_ngram.gamma, mode='markers', hover_data=["new_ngram"]))
                         fig1.update_xaxes(type=scale)
@@ -2498,24 +2496,20 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                     return fig, fig1
 
                 if n > 1:
-                    ngram = tuple(df['ngram'][ids[active_cell['row']]].split())
-                    if ngram[0] == 'new_ngram':
+                    if ngram == 'new_ngram':
                         ngram = 'new_ngram'
-                else:
-                    ngram = df['ngram'][ids[active_cell['row']]]
+                    else:
+                        ngram = tuple(ngram.split())
 
                 for data in df['ngram']:
-                    # HERE ADDED to skip random float entities
                     if not isinstance(data, numbers.Number):
                         hover_data.append("".join(data))
                 fig.add_trace(go.Scatter(x=np.arange(L), y=model[ngram].bool, name="positions"))
                 if fa_click:
                     ww = fa_click['points'][0]["x"]
-                    # HERE ww-1
                     if overlap_mode == "overlapping":
                         fig.add_trace(go.Bar(x=np.arange(ww, L, w_s), y=model[ngram].counts[ww], name="∑∆w"))
                     else:
-                        # Для non-overlapping режиму потрібно розрахувати положення барів
                         bar_positions = []
                         k = 1
                         i = 0
@@ -2533,12 +2527,10 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                 graph_click = None
 
                 fig1.add_trace(go.Scatter(x=df["R"], y=df["gamma"], mode="markers", text=hover_data))
-                # fig1.add_trace(go.Scatter(x=[df['R'][active_cell['row']]],
-                fig1.add_trace(go.Scatter(x=[df['R'][ids[active_cell['row']]]],
-                                          # y=[df["b"][active_cell['row']]],
-                                          y=[df["gamma"][ids[active_cell['row']]]],
+                fig1.add_trace(go.Scatter(x=[selected_row["R"]],
+                                          y=[selected_row["gamma"]],
                                           mode="markers",
-                                          text=' '.join(ngram),
+                                          text=' '.join(ngram) if isinstance(ngram, tuple) else ngram,
                                           marker=dict(
                                               size=20,
                                               color="red"
@@ -2552,6 +2544,9 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
             return fig, fig1
 
     return dash.no_update, dash.no_update
+
+
+
 
 
 

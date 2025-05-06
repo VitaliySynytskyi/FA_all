@@ -2395,18 +2395,25 @@ clikced_ngram = None
 def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, ids, clicked_data, scale, fa_click,
                 graph_click, w_max, derived_virtual_data, n,
                 definition):
+    fig = go.Figure()
+    fig1 = go.Figure()
+    if page_current is None:
+        page_current = 0
+
+    # Перевірка активної вкладки таблиці
     if active_tab2 == "data_table":
-        fig = go.Figure()
-        fig1 = go.Figure()
         if active_tab1 == "tab2":
-            if active_cell and derived_virtual_data:
-                selected_row = derived_virtual_data[active_cell['row']]
+            # Перевіряємо, чи є активна клітинка на поточній сторінці
+            if active_cell is not None:
+                # Отримуємо дані для вибраної клітинки
+                selected_row = derived_virtual_data[active_cell['row']+page_current*50]
                 ngram = selected_row['ngram']
+
                 if definition == "dynamic":
                     if fa_click:
                         if overlap_mode == "overlapping":
                             fig.add_trace(go.Bar(x=np.arange(w_s, L, w_s), y=new_ngram.count[fa_click["points"][0]["x"]],
-                                                name="∑∆w"))
+                                                 name="∑∆w"))
                         else:
                             bar_positions = []
                             k = 1
@@ -2454,6 +2461,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                             i += shift
                             k += 1
                         fig.add_trace(go.Bar(x=bar_positions, y=model[ngram].counts[ww], name="∑∆w"))
+
                 if graph_click:
                     www = graph_click['points'][0]['x']
                 graph_click = None
@@ -2472,15 +2480,16 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                 fig1.update_xaxes(type=scale)
                 fig1.update_yaxes(type=scale)
                 fig1.update_layout(hovermode="x unified")
-                active_cell = None
                 return fig, fig1
+
             else:
-                active_cell = None
+                # Якщо немає активної клітинки, то повертаємо порожні графіки
                 return fig, fig1
         else:
+            # Обробка іншої вкладки
             hover_data = []
             if active_cell and derived_virtual_data:
-                selected_row = derived_virtual_data[active_cell['row']]
+                selected_row = derived_virtual_data[active_cell['row']+page_current*50]
                 ngram = selected_row['ngram']
                 if definition == "dynamic":
                     if fa_click:
@@ -2539,7 +2548,6 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                 fig1.update_yaxes(type=scale)
                 fig1.update_xaxes(type=scale)
                 fig1.update_layout(hovermode="x unified")
-                active_cell = None
 
             return fig, fig1
 

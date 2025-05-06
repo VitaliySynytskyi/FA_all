@@ -585,7 +585,7 @@ def prepare_data(data: str, n: int, split: str, filename: str) -> List:
             if isComputerText:
                 lexer = guess_lexer_or_text(data, filename)
                 if not isinstance(lexer, TextLexer): 
-                    result = tokenize_code(data, lexer)
+                    result = tokenize_comp_code(data, lexer)
                 else:
                     print(f"could not guess language of file {filename}")
                     data = re.sub(r'--', ' -', data)
@@ -631,7 +631,7 @@ def prepare_data(data: str, n: int, split: str, filename: str) -> List:
             if isComputerText:
                 lexer = guess_lexer_or_text(data, filename)
                 if not isinstance(lexer, TextLexer): 
-                    words = tokenize_code(data, lexer)
+                    words = tokenize_comp_code(data, lexer)
                 else:
                     print(f"could not guess language of file {filename}")
                     data = re.sub(r'--', ' -', data)
@@ -826,9 +826,33 @@ layout1 = html.Div([
                                                 ),
                                             ]
                                         ),
-                                        html.Div(id='isComputerTextOutput', style={'display': 'none'})
+                                        # html.Div(id='isComputerTextOutput', style={'display': 'none'})
                                 ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
                                 ]),
+                                
+                                
+                                html.Div([
+                                    html.Label("Ignore comments"),
+                                    html.Div(
+                                        [
+                                            dbc.InputGroup(
+                                            [
+                                                html.Div(
+                                                    dbc.RadioItems(
+                                                        options=[
+                                                            {"label": "Include comments", "value": False},
+                                                            {"label": "Ignore comments", "value": True}
+                                                        ],
+                                                        value=False,
+                                                        id="ignoreCommentsRadio",
+                                                        inline=True
+                                                    ),
+                                                    style={"marginLeft": "10px"} 
+                                                ),
+                                            ]
+                                        ),
+                                ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"})
+                                ], id='ignoreCommentsDiv', style={'display': 'none'}),
 
                                 # FILE SECTION
                                 html.Div([
@@ -1090,7 +1114,22 @@ layout1 = html.Div([
                                     html.Div(id="temp_seve_batch", style={'marginBottom': '10px'}),
                                 ], style={"marginBottom": "15px", "borderBottom": "1px solid #eee", "paddingBottom": "10px"}),
                                 
-                                html.Div(id="alert", children=[])
+
+
+
+                                html.Div([
+                                     html.H6("Output folder",
+                                            className="text-primary text-center mb-2",
+                                            style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
+                                     dbc.Button("Choose folder", id="pick_output_folder", color="secondary", 
+                                            className="w-100 mb-2", 
+                                            style={"fontWeight": "bold", "boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}, 
+                                            disabled=analyze_visible),
+                                    ], ),
+
+                                html.Div(id="alert", children=[]),
+                                html.Div(id="output_folder_label", style={'marginBottom': '10px'}),
+
                                 # html.H6("Boundary Condition:"),
                                 # dcc.RadioItems(id='condition',options=[{"label":"no","value":"no"},{"label":"periodic","value":"periodic"},{"label":"ordinary","value":"ordinary"}],value="words"),
                             ]
@@ -1571,7 +1610,7 @@ def process_selected_file(selected_filename, split, definition, n):
             if isComputerText:
                 lexer = guess_lexer_or_text(file, selected_filename)
                 if not isinstance(lexer, TextLexer): 
-                    data = tokenize_code(file, lexer)
+                    data = tokenize_comp_code(file, lexer)
                 else:
                     print(f"could not guess language of file {selected_filename}")
                     file = re.sub(r'\n+', '\n', file)
@@ -1733,7 +1772,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
                 if isComputerText:
                     lexer = guess_lexer_or_text(file_content, filename)
                     if not isinstance(lexer, TextLexer): 
-                        data = tokenize_code(file_content, lexer)
+                        data = tokenize_comp_code(file_content, lexer)
                     else:
                         print(f"could not guess language of file {filename}")
                         file_text = re.sub(r'\n+', '\n', file_content)
@@ -2050,15 +2089,17 @@ def update_batch_table_columns(n_clicks):
      State("batch_window_mode", "value")]
 )
 def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_option, overlap_mode, batch_window_mode):
+    global save_folder
     if n_clicks is None:
         return dash.no_update
     if not batch_results:
         return html.Div(["No batch results to save"])
     
     try:
-        save_folder = pick_folder()
         if save_folder is None or save_folder == "":
-            return dash.no_update
+            pick_folder()
+            if save_folder is None or save_folder == "":
+                return dash.no_update
         # Create DataFrame from batch results
         df_batch = pd.DataFrame(batch_results)
         
@@ -2574,15 +2615,18 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                State("min_dist_option", "value"),
                State("overlap_mode", "value")])
 def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w_max, fmin, opt, definition, min_dist_option, overlap_mode):
+    global save_folder
     if n is None:
         return dash.no_update
     if filename is None:
         return [html.Div(["No file selected to save"])]
     
     try:
-        save_folder = pick_folder()
         if save_folder is None or save_folder == "":
-            return dash.no_update
+            pick_folder()
+            if save_folder is None or save_folder == "":
+                return dash.no_update
+        
         file = filename
         global df, model, new_ngram
 
@@ -2700,27 +2744,43 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
         return [html.Div(["Error saving data: {}".format(str(e))])]
 
 
+save_folder = None
 def pick_folder():
+    global save_folder
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
-    folder_selected = filedialog.askdirectory()
+    save_folder = filedialog.askdirectory()
     root.destroy() 
 
-    if folder_selected:
-        return folder_selected
-    else:
-        return None
+@app.callback(
+    [Output('output_folder_label', 'children')],
+    [Input('pick_output_folder', 'n_clicks')]
+)
+def pick_output_folder(n):
+    global save_folder
+    if n is None:
+        return dash.no_update
+    pick_folder()
+    return [html.Div(["Selected output folder as {} ".format(save_folder)])] 
+
+
+isIgnoreComments = False
 
 @app.callback(
-    [Output('isComputerTextOutput', 'children'),
-    Output('file-selector', 'value')],
-    Input('computerTextRadio', 'value')
+    [Output('file-selector', 'value'),
+     Output('ignoreCommentsDiv', 'style')],
+    [Input('computerTextRadio', 'value'),
+     Input('ignoreCommentsRadio', 'value')]
 )
-def update_isComputerText(selected_value):
-    global isComputerText
-    isComputerText = selected_value
-    return "", None
+def update_file_and_ignore(isComputerText_value, isIgnoreComments_value):
+    global isComputerText, isIgnoreComments
+    isComputerText = isComputerText_value
+    isIgnoreComments = isIgnoreComments_value
+    return (
+        None,
+        {'display': 'block'} if isComputerText else {'display': 'none'}
+    )
 
 def guess_lexer_or_text(code, file_path):
     try:
@@ -2729,23 +2789,24 @@ def guess_lexer_or_text(code, file_path):
         lexer = get_lexer_by_name("text")
     return lexer
 
-def tokenize_code(code, lexer):
+def tokenize_comp_code(code, lexer):
     comm, whitespace, other = 0, 0, 0
     tokens = lex(code, lexer)
     token_list = []
     for token_type, token_value in tokens:
         if token_type in Token.Comment:
-            comm += 1
-            file_text = re.sub(r'\n+', '\n', token_value)
-            file_text = re.sub(r'\n\s\s', '\n', file_text)
-            file_text = re.sub(r'﻿', '', file_text)
-            file_text = re.sub(r'--', ' -', file_text)
-            processor = NgrammProcessor()
-            processor.preprocess(file_text)
-            for x in processor.get_words():
-                token_list.append(x)
-            del processor
-            del file_text
+            if not isIgnoreComments:
+                comm += 1
+                file_text = re.sub(r'\n+', '\n', token_value)
+                file_text = re.sub(r'\n\s\s', '\n', file_text)
+                file_text = re.sub(r'﻿', '', file_text)
+                file_text = re.sub(r'--', ' -', file_text)
+                processor = NgrammProcessor()
+                processor.preprocess(file_text)
+                for x in processor.get_words():
+                    token_list.append(x)
+                del processor
+                del file_text
         elif token_type in Token.Text or token_type in Token.Whitespace:
             whitespace += 1
             pass 
@@ -2753,6 +2814,8 @@ def tokenize_code(code, lexer):
             other += 1
             token_list.append(token_value)
     print("\n comm", comm,"\n whitespace", whitespace,"\n other", other)
+    count = sum(token == "are" for token in token_list)
+    print("count",count)
     return token_list
 
 # import webbrowser # Commented out as it might cause issues if run non-interactively

@@ -911,7 +911,7 @@ layout1 = html.Div([
                                     
                                     dbc.InputGroup(
                                         [
-                                            dbc.InputGroupText("Size of ngram"),
+                                            dbc.InputGroupText("Order of n-grams"),
                                             dbc.Input(id="n_size", type="number", value=1, style={"font-weight": "bold"})
                                         ], 
                                         size="md", 
@@ -951,7 +951,7 @@ layout1 = html.Div([
                                 className="mb-2"
                                     ),
                                     dbc.InputGroup([
-                                        dbc.InputGroupText("Min Tau:"),
+                                        dbc.InputGroupText("Min tau:"),
                                         dbc.Select(
                                             id="min_dist_option",
                                             options=[
@@ -1292,7 +1292,7 @@ layout1 = html.Div([
                         dbc.CardHeader(
                             dbc.Tabs(
                                 [
-                                    dbc.Tab(label="distribution", tab_id="tab1", label_style={"font-weight": "bold"}),
+                                    dbc.Tab(label="n-gram distribution in text", tab_id="tab1", label_style={"font-weight": "bold"}),
                                 ],
                                 id='card-tabs1',
                                 active_tab="tab1"
@@ -1317,8 +1317,8 @@ layout1 = html.Div([
                         dbc.CardHeader(
                             dbc.Tabs(
                                 [
-                                    dbc.Tab(label="flunctuacion", tab_id="tab2", label_style={"font-weight": "bold"}),
-                                    dbc.Tab(label="alpha/R", tab_id="tab3", label_style={"font-weight": "bold"})
+                                    dbc.Tab(label="fluctuations", tab_id="tab2", label_style={"font-weight": "bold"}),
+                                    dbc.Tab(label="gamma vs. R", tab_id="tab3", label_style={"font-weight": "bold"})
                                 ],
                                 id='card-tabs',
                                 active_tab="tab2"
@@ -1330,8 +1330,8 @@ layout1 = html.Div([
                             dcc.RadioItems(
                                 id="scale",
                                 options=[
-                                    {"label": "linear", "value": "linear"},
-                                    {"label": "log", "value": "log"}
+                                    {"label": "linear fit", "value": "linear"},
+                                    {"label": "log-log fit", "value": "log"}
                                 ],
                                 value="linear",
                                 labelStyle={"marginRight": "15px", "fontWeight": "bold"},

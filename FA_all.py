@@ -280,7 +280,7 @@ def make_markov_chain(data: List, order: int = 1) -> Dict[str, Ngram]:
 
         # З'єднуємо останнє слово з першим та перше з останнім
         model[data[L]].update([data[0]])
-        if data[L] not in model[data[L]].pos:
+        if data[L] not in model:
             model[data[L]].pos.append(L + order)
             model[data[L]].bool = np.zeros(L, dtype=np.uint8)
             model[data[L]].bool[L-1] = 1

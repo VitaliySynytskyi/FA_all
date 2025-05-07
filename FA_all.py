@@ -942,7 +942,7 @@ layout1 = html.Div([
                                                     {"label": "periodic", "value": "periodic"},
                                                     {"label": "ordinary", "value": "ordinary"}
                                                 ],
-                                                value="no",
+                                                value="periodic",
                                                 style={"font-weight": "bold"}
                                             ),
                                     dbc.InputGroupText("Boundary Condition:")

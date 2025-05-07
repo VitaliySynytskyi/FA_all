@@ -2753,7 +2753,9 @@ def pick_folder():
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
-    save_folder = filedialog.askdirectory()
+    new_folder = filedialog.askdirectory()
+    if new_folder and new_folder is not None and new_folder != "":
+        save_folder = new_folder
     root.destroy() 
 
 @app.callback(
@@ -2765,7 +2767,12 @@ def pick_output_folder(n):
     if n is None:
         return dash.no_update
     pick_folder()
-    return [html.Div(["Selected output folder as {} ".format(save_folder)])] 
+    if save_folder and save_folder is not None:
+        return [html.Div(["Selected output folder as {} ".format(save_folder)]) ] 
+    else:
+        return [html.Div(["No output folder selected"])] 
+
+
 
 
 isIgnoreComments = False

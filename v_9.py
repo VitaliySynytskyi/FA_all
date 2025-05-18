@@ -817,57 +817,6 @@ import dash_bootstrap_components as dbc
 
 layout2 = html.Div()
 
-# Додайте це модальне вікно після text_type_modal, але перед layout1
-batch_type_modal = dbc.Modal(
-    [
-        dbc.ModalHeader("Виберіть тип обробки для всіх файлів"),
-        dbc.ModalBody([
-            html.P("Як обробляти всі завантажені файли?"),
-            dbc.RadioItems(
-                id="batch-type-selector",
-                options=[
-                    {"label": "Всі як звичайний текст", "value": "all_regular"},
-                    {"label": "Всі як програмний код", "value": "all_code"},
-                    {"label": "Автоматично за розширенням файлу", "value": "auto_detect"}
-                ],
-                value="auto_detect",
-                style={"margin": "20px 0"}
-            ),
-            html.Div([
-                html.Label("Мова програмування (якщо всі файли як код):", 
-                          style={"marginBottom": "5px"}),
-                dcc.Dropdown(
-                    id="batch-language-selector",
-                    options=get_all_pygments_languages(),
-                    value="python",
-                    searchable=True,
-                    placeholder="Виберіть мову програмування...",
-                    style={"marginBottom": "10px"},
-                    clearable=False
-                )
-            ], id="batch-language-container", style={"display": "none"}),
-            html.Hr(),
-            html.P("Налаштування для програмного коду:", style={"fontWeight": "bold", "marginTop": "15px"}),
-            dbc.Checklist(
-                options=[
-                    {"label": "Включати коментарі при обробці коду", "value": True}
-                ],
-                value=[True],
-                id="batch-include-comments",
-                switch=True,
-                style={"margin": "10px 0"}
-            ),
-        ]),
-        dbc.ModalFooter([
-            dbc.Button("Скасувати", id="batch-type-cancel", className="me-2"),
-            dbc.Button("Почати обробку", id="batch-type-confirm", color="primary")
-        ]),
-    ],
-    id="batch-type-modal",
-    centered=True,
-    size="lg"
-)
-
 # Після оголошення кольорів та інших UI елементів, але перед layout1
 text_type_modal = dbc.Modal(
     [
@@ -1465,8 +1414,7 @@ html.Div(id="file-type-info", children="", style={"display": "none", "margin": "
 
 app.layout = html.Div([
     layout1,
-    text_type_modal,
-    batch_type_modal
+    text_type_modal
 ])
 df = None
 g = None
@@ -1604,39 +1552,6 @@ def update_upload_status(contents, filenames, n_size):
     return summary_message, options
 
 
-@app.callback(
-    Output("batch-language-container", "style"),
-    [Input("batch-type-selector", "value")]
-)
-def toggle_batch_language_selector(batch_type):
-    if batch_type == "all_code":
-        return {"display": "block"}
-    return {"display": "none"}
-
-
-@app.callback(
-    Output('batch-type-modal', 'is_open'),
-    [Input('batch_process', 'n_clicks'),
-     Input('batch-type-confirm', 'n_clicks'),
-     Input('batch-type-cancel', 'n_clicks')],
-    [State('batch-type-modal', 'is_open')]
-)
-def handle_batch_modal(batch_clicks, confirm_clicks, cancel_clicks, is_open):
-    ctx = dash.callback_context
-    
-    if not ctx.triggered:
-        return False
-    
-    trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    
-    if trigger_id == 'batch_process':
-        # Відкрити модальне вікно при натисканні "Process All Files"
-        return True
-    elif trigger_id in ['batch-type-confirm', 'batch-type-cancel']:
-        # Закрити модальне вікно при натисканні будь-якої кнопки
-        return False
-    
-    return is_open
 # Add callback to handle file selection
 @app.callback(
     [Output('temp-state-holder', 'data'),
@@ -1897,7 +1812,7 @@ new_ngram = None
 @app.callback(
     [Output("batch_table", "data"),
      Output("batch_results_container", "style")],
-    [Input("batch-type-confirm", "n_clicks")],  # Змінили тригер на підтвердження
+    [Input("batch_process", "n_clicks")],
     [State("fmin1", "value"),
      State("fmin2", "value"),
      State("split", "value"),
@@ -1910,91 +1825,47 @@ new_ngram = None
      State("wh", "value"),
      State("we", "value"),
      State("wm", "value"),
-     State("batch_window_mode", "value"),
-     State("batch-type-selector", "value"),      # Додали стан типу batch обробки
-     State("batch-language-selector", "value"),  # Додали стан мови для batch
-     State("batch-include-comments", "value")]   # Додали стан коментарів для batch
+     State("batch_window_mode", "value")]
 )
 def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definition, min_dist_option, 
-                      overlap_mode, w, wh, we, wm, batch_window_mode, batch_type, batch_language, include_comments):
+                      overlap_mode, w, wh, we, wm, batch_window_mode):
     global batch_results, uploaded_files, file_lengths, file_types
     global L, data, length_updated, model, V, df, new_ngram
 
     if n_clicks is None or not uploaded_files:
         return [], {"display": "none"}
     
-    # Перетворюємо стан перемикача коментарів у boolean
-    if isinstance(include_comments, list):
-        include_comments_bool = True if True in include_comments else False
-    else:
-        include_comments_bool = bool(include_comments)
-    
-    print(f"Batch processing with type: {batch_type}, include_comments = {include_comments_bool}")
-    
     # Find Lmin and Lmax for the current split method
     lengths = []
-    # Визначаємо тип всіх файлів відповідно до вибору користувача
     for filename in list(uploaded_files.keys()):
-        if batch_type == "all_regular":
-            # Всі файли як звичайний текст
-            file_types[filename] = {'type': 'regular', 'language': 'none'}
-        elif batch_type == "all_code":
-            # Всі файли як програмний код з вибраною мовою
-            file_types[filename] = {'type': 'code', 'language': batch_language}
-        else:  # auto_detect
-            # Автоматично визначаємо тип файлу за розширенням
-            detected_language = detect_programming_language(filename)
-            if detected_language != 'text':  # Якщо це програмний код
-                file_types[filename] = {'type': 'code', 'language': detected_language}
-            else:  # Якщо це звичайний текст
-                file_types[filename] = {'type': 'regular', 'language': 'none'}
-        
-        print(f"File: {filename} detected as {file_types[filename]}")
-        
-        # Отримуємо або перераховуємо довжину відповідно до типу файлу
-        file_content = uploaded_files[filename]
-        file_type_info = file_types[filename]
+        # Перевіряємо тип файлу
+        file_type_info = file_types.get(filename, {'type': 'regular', 'language': 'none'})
         
         if file_type_info['type'] == 'code':
-            # Для коду перераховуємо довжину з врахуванням коментарів
-            try:
-                data_temp = prepere_data(file_content, n_size, split, file_type='code', 
-                                       language=file_type_info['language'], 
-                                       filename=filename, 
-                                       include_comments=include_comments_bool)
-                file_length = len(data_temp) if data_temp else 0
-                # Оновлюємо збережену довжину для коду
-                if filename not in file_lengths:
-                    file_lengths[filename] = {}
-                file_lengths[filename]['code_tokens'] = file_length
-                lengths.append(file_length)
-                print(f"Code file {filename}: {file_length} tokens (with comments: {include_comments_bool})")
-            except Exception as e:
-                print(f"Error processing code file {filename}: {e}")
-                continue
+            # Отримуємо збережене значення для цього файлу або використовуємо за замовчуванням
+            include_comments_value = include_comments_state.get(filename, True)
+            data = prepere_data(file_content, n_size, split, file_type='code', 
+                               language=file_type_info['language'], 
+                               filename=filename, 
+                               include_comments=include_comments_value)
         else:
-            # Для звичайного тексту використовуємо вже збережену довжину
+            # Для звичайного тексту використовуємо вибраний тип розбиття
             if split in file_lengths.get(filename, {}):
-                file_length = file_lengths[filename][split]
-                lengths.append(file_length)
-                print(f"Text file {filename}: {file_length} {split}s")
+                lengths.append(file_lengths[filename][split])
     
     if not lengths:
         return [], {"display": "none"}
         
     lmin = min(lengths)
     lmax = max(lengths)
-    print(f"Length range: {lmin} - {lmax}")
     
     # Initialize batch results list
     batch_results = []
     
     # Process each file
     for idx, (filename, file_content) in enumerate(list(uploaded_files.items()), 1):
-        print(f"\n=== Processing file {idx}: {filename} ===")
-        
-        # Отримуємо тип файлу (вже визначений вище)
-        file_type_info = file_types[filename]
+        # Додайте обробку типу файлу
+        file_type_info = file_types.get(filename, {'type': 'regular', 'language': 'none'})
         
         # Вибираємо потрібну довжину в залежності від типу файлу
         if file_type_info['type'] == 'code':
@@ -2010,8 +1881,6 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             f_min = fmin1 + (fmin2 - fmin1) * (file_length - lmin) / (lmax - lmin)
             f_min = round(f_min)  # Round to nearest integer
         
-        print(f"F_min for this file: {f_min}")
-        
         # Process the file
         start_time = time()
         
@@ -2019,13 +1888,13 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         
         # Різна підготовка даних в залежності від типу файлу
         if file_type_info['type'] == 'code':
-            print(f"Processing as code ({file_type_info['language']}) with comments: {include_comments_bool}")
+
+            include_comments_value = False
             data = prepere_data(file_content, n_size, split, file_type='code', 
-                               language=file_type_info['language'], 
-                               filename=filename, 
-                               include_comments=include_comments_bool)
+                         language=file_type_info['language'], 
+                         filename=filename, 
+                         include_comments=include_comments_value)
         else:
-            print(f"Processing as regular text")
             if definition == "dynamic":
                 data = prepere_data(file_content, n_size, split)
             else:
@@ -2071,7 +1940,6 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
                     data = processor.get_words()
 
         L = len(data)
-        print(f"Data length: {L}")
         
         # Calculate window parameters based on batch settings
         if batch_window_mode == "ui":
@@ -2096,8 +1964,6 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         w_val = max(5, w_val)
         wh_val = max(1, wh_val)
         we_val = max(1, we_val)
-        
-        print(f"Window parameters: w={w_val}, wh={wh_val}, we={we_val}, wm={wm_val}")
         
         length_updated = True
         
@@ -2183,9 +2049,10 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         end_time = time()
         processing_time = end_time - start_time
         
-        print(f"Processing completed in {processing_time:.4f}s")
+        # Додаткова інформація про тип файлу
+        file_type_info = file_types.get(filename, {'type': 'regular', 'language': 'none'})
         
-        # Store results with additional information about processing
+        # Store results
         result = {
             "no": idx,
             "filename": filename,
@@ -2208,10 +2075,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             "wm_val": wm_val,
             # Add file type information
             "file_type": file_type_info['type'],
-            "language": file_type_info['language'],
-            # Add batch processing information
-            "batch_type": batch_type,
-            "include_comments": include_comments_bool if file_type_info['type'] == 'code' else None
+            "language": file_type_info['language']
         }
         
         batch_results.append(result)
@@ -2230,8 +2094,6 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         means['filename'] = 'Average'
         means['file_type'] = ''
         means['language'] = ''
-        means['batch_type'] = ''
-        means['include_comments'] = None
         
         # Calculate standard deviations
         stds = {col: round(np.std([result[col] for result in batch_results]), 8) for col in numeric_columns}
@@ -2239,19 +2101,15 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         stds['filename'] = 'Std. Dev.'
         stds['file_type'] = ''
         stds['language'] = ''
-        stds['batch_type'] = ''
-        stds['include_comments'] = None
         
         # Add summary rows
         batch_results.append(means)
         batch_results.append(stds)
     
-    print(f"\nBatch processing completed. Total files processed: {len(uploaded_files)}")
     return batch_results, {"display": "block"}
-
 @app.callback(
     Output("batch_table", "columns"),
-    [Input("batch-type-confirm", "n_clicks")]  # Змінили тригер
+    [Input("batch_process", "n_clicks")]
 )
 def update_batch_table_columns(n_clicks):
     if n_clicks is None:
@@ -2260,8 +2118,6 @@ def update_batch_table_columns(n_clicks):
     columns = [
         {"name": "No.", "id": "no"},
         {"name": "Filename", "id": "filename"},
-        {"name": "Type", "id": "file_type"},
-        {"name": "Language", "id": "language"},
         {"name": "F_min", "id": "f_min"},
         {"name": "Length (L)", "id": "length"},
         {"name": "Vocabulary (V)", "id": "vocabulary"},
@@ -2281,6 +2137,8 @@ def update_batch_table_columns(n_clicks):
     ]
     
     return columns
+
+# Add callback to save batch results
 @app.callback(
     Output("temp_seve_batch", "children"),  # Changed output ID to avoid conflicts
     [Input("save_batch", "n_clicks")],
@@ -2289,10 +2147,9 @@ def update_batch_table_columns(n_clicks):
      State("condition", "value"),
      State("def", "value"),
      State("min_dist_option", "value"),
-     State("overlap_mode", "value"),
-     State("batch-type-selector", "value")]
+     State("overlap_mode", "value")]
 )
-def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_option, overlap_mode, batch_type):
+def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_option, overlap_mode):
     if n_clicks is None or not batch_results:
         return html.Div(["No batch results to save"])
     
@@ -2300,9 +2157,9 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
         # Create DataFrame from batch results
         df_batch = pd.DataFrame(batch_results)
         
-        # Create filename with parameters including batch type
-        output_filename = "saved_data/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={},batch_type={}.xlsx".format(
-            n_size, split, condition, definition, min_dist_option, overlap_mode, batch_type)
+        # Create filename with parameters
+        output_filename = "saved_data/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={}.xlsx".format(
+            n_size, split, condition, definition, min_dist_option, overlap_mode)
         
         # Save to Excel - modify to use older pandas style
         writer = pd.ExcelWriter(output_filename)
@@ -2312,7 +2169,6 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
         return html.Div(["Saved batch results to {}".format(output_filename)])
     except Exception as e:
         return html.Div(["Error saving batch results: {}".format(str(e))])
-    
 
 @app.callback([Output("table", "data"), 
                Output("chain", "figure"),

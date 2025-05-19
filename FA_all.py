@@ -827,8 +827,8 @@ batch_type_modal = dbc.Modal(
                 id="batch-type-selector",
                 options=[
                     {"label": "Всі як звичайний текст", "value": "all_regular"},
-                    {"label": "Всі як програмний код", "value": "all_code"},
-                    {"label": "Автоматично за розширенням файлу", "value": "auto_detect"}
+                    # {"label": "Всі як програмний код", "value": "all_code"},
+                    {"label": "Всі як програмний код (автоматично за розширенням файлу)", "value": "auto_detect"}
                 ],
                 value="auto_detect",
                 style={"margin": "20px 0"}
@@ -1897,7 +1897,8 @@ new_ngram = None
 @app.callback(
     [Output("batch_table", "data"),
      Output("batch_results_container", "style")],
-    [Input("batch-type-confirm", "n_clicks")],  # Змінили тригер на підтвердження
+    [Input("batch_process", "n_clicks"),
+     Input("batch-type-confirm", "n_clicks")],  # ДОДАНО ЦЕЙ ТРИГЕР
     [State("fmin1", "value"),
      State("fmin2", "value"),
      State("split", "value"),
@@ -1911,16 +1912,30 @@ new_ngram = None
      State("we", "value"),
      State("wm", "value"),
      State("batch_window_mode", "value"),
-     State("batch-type-selector", "value"),      # Додали стан типу batch обробки
-     State("batch-language-selector", "value"),  # Додали стан мови для batch
-     State("batch-include-comments", "value")]   # Додали стан коментарів для batch
+     State("batch-type-selector", "value"),
+     State("batch-language-selector", "value"),
+     State("batch-include-comments", "value")]
 )
-def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definition, min_dist_option, 
+def process_all_files(batch_clicks, confirm_clicks, fmin1, fmin2, split, n_size, condition, definition, min_dist_option, 
                       overlap_mode, w, wh, we, wm, batch_window_mode, batch_type, batch_language, include_comments):
     global batch_results, uploaded_files, file_lengths, file_types
     global L, data, length_updated, model, V, df, new_ngram
 
-    if n_clicks is None or not uploaded_files:
+    # ДОДАНО ЛОГІКУ ДЛЯ ВИЗНАЧЕННЯ ТРИГЕРА
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return [], {"display": "none"}
+    
+    trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    
+    # Функція виконується лише якщо:
+    # 1. Натиснули batch_process і є файли
+    # 2. Підтвердили налаштування в модальному вікні
+    if trigger_id == "batch_process" and not uploaded_files:
+        return [], {"display": "none"}
+    elif trigger_id == "batch-type-confirm" and (confirm_clicks is None or not uploaded_files):
+        return [], {"display": "none"}
+    elif batch_clicks is None and confirm_clicks is None:
         return [], {"display": "none"}
     
     # Перетворюємо стан перемикача коментарів у boolean
